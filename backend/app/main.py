@@ -278,8 +278,8 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "ending": "ဇာတ်လမ်းအကျဉ်းမှ အတည်ပြုရန်",
             "assumptions_to_confirm": ["ဇာတ်ကောင်အသက်၊ ရုပ်ရည်၊ ဆက်ဆံရေး", "တိကျသော Dialogue", "Scene တစ်ခုစီ၏ တည်နေရာနှင့် အချိန်"]
         },
-        "expanded_story": story + "\\n\\nPRODUCTION STORY BEAT OUTLINE (Template Mode)\\n" + "\\n".join(
-            f"{i+1}. {title}: {rule}\\n   Story source to preserve: {story[:260]}"
+        "expanded_story": story + "\n\nPRODUCTION STORY BEAT OUTLINE (Template Mode)\n" + "\n".join(
+            f"{i+1}. {title}: {rule}\n   Story source to preserve: {story[:260]}"
             for i, (title, rule) in enumerate(beats)
         ),
         "characters": characters, "locations": locations, "props": [
