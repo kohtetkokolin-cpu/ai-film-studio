@@ -2,203 +2,92 @@ import { FormEvent, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "./supabase";
 
-const API = import.meta.env.VITE_API_BASE_URL || "";
-type Project = {
-  id: string; title: string; genre: string; duration_seconds: number; visual_style: string;
-  workflow: string; aspect_ratio: string; language: string; story_idea: string;
-  character_bible: string; location_bible: string; continuity_notes: string; clips?: Clip[];
+const API = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+type Character = { id:string; name:string; role?:string; age?:string; appearance?:string; wardrobe?:{id:string;description:string}[]; expressions?:string[]; movement?:string; voice?:string; reference_prompt?:string; reference_url?:string };
+type LocationAsset = { id:string; name:string; environment_lock?:string; lighting_states?:string[]; reference_prompt?:string; reference_url?:string };
+type Prop = { id:string; name:string; description?:string; continuity?:string };
+type Scene = { scene_id:string; clip_number:number; start_seconds:number; duration_seconds:number; beat_title:string; dramatic_purpose?:string; location_id:string; character_ids:string[]; wardrobe_ids?:string[]; prop_ids?:string[]; action:string; dialogue:string; shot_size:string; camera_angle:string; camera_movement:string; lighting:string; sound:string; continuity:string[] };
+type Package = { schema_version?:number; generation_source?:string; notice?:string; story_analysis?:Record<string,string|string[]>; expanded_story?:string; characters:Character[]; locations:LocationAsset[]; props:Prop[]; scenes:Scene[]; quality_report?:{passed:boolean;issues:string[];scene_count:number;total_seconds:number} };
+type Clip = { scene_id?:string; clip_number:number; start_seconds:number; duration_seconds:number; beat_title:string; character_ids?:string[]; location_id?:string; dialogue?:string; action?:string; image_prompt?:string; visual_prompt:string; negative_prompt:string; continuity_checklist:string[] };
+type Project = { id:string; title:string; genre:string; duration_seconds:number; visual_style:string; workflow:string; aspect_ratio:string; language:string; culture:string; generation_mode:string; sound_mode:string; story_idea:string; character_bible:string; location_bible:string; continuity_notes:string; production_package?:Package; clips?:Clip[] };
+type ProjectForm = Omit<Project,"id"|"production_package"|"clips">;
+const defaults:ProjectForm = {
+ title:"မောင်မောင် အိမ်ပြန်လာသောည",genre:"Drama",duration_seconds:60,visual_style:"Realistic cinematic",
+ workflow:"automatic",aspect_ratio:"9:16",language:"Burmese",culture:"Myanmar",generation_mode:"auto",sound_mode:"dialogue",
+ story_idea:"မောင်မောင် တစ်နေကုန် အပြင်ထွက်ပြီး အိမ်ပြန်လာသည်။ သူ့အမေက အိမ်တံခါးဝတွင် စောင့်နေပြီး ဘယ်သွားနေလဲဟု မေးသည်။ မောင်မောင်၏ လက်ထဲတွင် မိသားစုအကြောင်း လျှို့ဝှက်ချက်ဖော်ထုတ်မည့် စာအိတ်တစ်အိတ် ပါလာသည်။",
+ character_bible:"မောင်မောင် — အသက် ၂၅ နှစ်၊ အဓိကဇာတ်ကောင်။\nမောင်မောင်၏အမေ — အသက် ၅၂ နှစ်၊ စိုးရိမ်တတ်ပြီး ပြတ်သားသောစရိုက်။",
+ location_bible:"LOC-A — မြန်မာမိသားစုအိမ် အပြင်ဘက်၊ သစ်သားတံခါးနှင့် အိမ်ရှေ့ခြံ။\nLOC-B — အိမ်အတွင်း ဧည့်ခန်း၊ သစ်သားစားပွဲနှင့် ကုလားထိုင်။",
+ continuity_notes:"ဇာတ်ကောင်မျက်နှာ၊ အသက်၊ ဆံပင်၊ ဝတ်စုံကို မပြောင်းပါနှင့်။ စာအိတ်ကို PROP-001 အဖြစ် တစ်သမတ်တည်းထားပါ။"
 };
-type Clip = {
-  id?: string; clip_number: number; start_seconds: number; duration_seconds: number;
-  beat_title: string; visual_prompt: string; negative_prompt: string; continuity_checklist: string[];
-};
-const defaults = {
-  title: "နောက်ဆုံးရထား", genre: "Drama", duration_seconds: 180,
-  visual_style: "Realistic cinematic", workflow: "automatic", aspect_ratio: "16:9", language: "Burmese",
-  story_idea: "ငယ်ဘဝကတည်းက ချစ်ခဲ့ကြတဲ့ မောင်နဲ့ သဇင်ဟာ ဘူတာရုံဟောင်းမှာ အတူရထားစီးခဲ့ကြတယ်။ သဇင်က ပြန်လာမယ်လို့ ကတိပေးပြီး ထွက်ခွာသွားတယ်။ နှစ်ပေါင်းများစွာကြာတဲ့အခါ မောင်က ထိုင်ခုံဟောင်းလေးမှာ စောင့်နေဆဲဖြစ်တယ်။ စာအိတ်ဟောင်းတစ်ခုက သူတို့ ရထားဘူတာလွဲခဲ့ကြောင်းနဲ့ သဇင် ပြန်မလာနိုင်တော့ကြောင်း ဖော်ပြတယ်။",
-  character_bible: "မောင် — ငယ်ဘဝအသက် ၁၀ နှစ်၊ ဆံပင်အနက်၊ မျက်လုံးညို။ အသက်ကြီးချိန် ၇၀ ဝန်းကျင်၊ ဆံပင်ဖြူ၊ အရောင်မှိန်အင်္ကျီနှင့် လုံချည်။ သဇင် — ငယ်ဘဝအသက် ၁၀ နှစ်၊ ဆံပင်ရှည်၊ နူးညံ့သောအပြုံး။",
-  location_bible: "မြန်မာနိုင်ငံကျေးလက်ဘူတာရုံဟောင်း၊ သစ်သားထိုင်ခုံတစ်လုံး၊ ရထားလမ်းနှင့် ပြတင်းပေါက်ဘေးထိုင်ခုံ။",
-  continuity_notes: "မျက်နှာ၊ အသက်၊ ဆံပင်၊ အဝတ်အစား၊ ဘူတာရုံ၊ သစ်သားထိုင်ခုံနှင့် အဝါရောင်စာအိတ်ကို clip အားလုံးတွင် တစ်သမတ်တည်းထားရန်။"
-};
-type FormData = typeof defaults;
-
+const stages = ["Project Setup","Story & Analysis","Character Bible","Location Bible","Scene Breakdown","Prompt Production"];
+const stageDescriptions = ["ဇာတ်လမ်းနှင့် production setting များ","ဇာတ်လမ်းအပြည့်၊ ရည်ရွယ်ချက်၊ ပဋိပက္ခနှင့် အလှည့်အပြောင်း","ဇာတ်ကောင် ID၊ ရုပ်ရည်၊ ဝတ်စုံနှင့် reference prompt","Location ID၊ ပတ်ဝန်းကျင်နှင့် reference prompt","Scene ID၊ Dialogue၊ Action၊ Camera နှင့် Lighting","Image Prompt၊ Video Prompt၊ Negative Prompt နှင့် QC"];
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [form, setForm] = useState<FormData>(defaults);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [project, setProject] = useState<Project | null>(null);
-  const [clips, setClips] = useState<Clip[]>([]);
-  const [selected, setSelected] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const count = Math.ceil(Number(form.duration_seconds) / 8);
-  const last = Number(form.duration_seconds) % 8 || 8;
-
-  useEffect(() => {
-    if (!supabase) { setAuthReady(true); return; }
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true); });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-      setProjects([]);
-      setProject(null);
-      setClips([]);
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
-
-  async function api<T>(path: string, init?: RequestInit): Promise<T> {
-    if (!session?.access_token) throw new Error("Login အရင်ဝင်ပါ။");
-    const response = await fetch(API + path, {
-      ...init,
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token, ...(init?.headers || {}) }
-    });
-    if (!response.ok) {
-      let msg = "Request failed " + response.status;
-      try { const data = await response.json(); msg = data.detail || msg; } catch {}
-      throw new Error(msg);
-    }
-    if (response.status === 204) return undefined as T;
-    return response.json();
-  }
-
-  async function refresh() {
-    if (!session) return;
-    try { setProjects(await api<Project[]>("/api/projects")); }
-    catch (e) { setMessage("Project များ မဖတ်နိုင်ပါ: " + String(e)); }
-  }
-  useEffect(() => { if (session) refresh(); }, [session?.access_token]);
-
-  async function authenticate(event: FormEvent) {
-    event.preventDefault();
-    if (!supabase) return;
-    setBusy(true); setMessage("");
-    try {
-      const result = authMode === "login"
-        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password });
-      if (result.error) throw result.error;
-      if (authMode === "signup" && !result.data.session) {
-        setMessage("အကောင့်ဖွင့်ပြီးပါပြီ။ Email confirmation လိုအပ်ပါက email ကိုအတည်ပြုပြီး Login ဝင်ပါ။");
-      } else setMessage("Login အောင်မြင်ပါပြီ။");
-    } catch (e) { setMessage("အမှား: " + String(e)); }
-    finally { setBusy(false); }
-  }
-
-  function change<K extends keyof FormData>(key: K, value: FormData[K]) {
-    setForm(prev => ({ ...prev, [key]: value }));
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setMessage("");
-    try {
-      const created = await api<Project>("/api/projects", {
-        method: "POST",
-        body: JSON.stringify({ ...form, duration_seconds: Number(form.duration_seconds) })
-      });
-      setProject(created);
-      const result = await api<{ clips: Clip[] }>("/api/projects/" + created.id + "/generate", { method: "POST" });
-      setClips(result.clips); setSelected(0);
-      setMessage("အောင်မြင်ပါပြီ။ ဇာတ်လမ်းအလိုက် " + result.clips.length + " ခုသော clip prompt များ ထုတ်ပြီး သိမ်းထားပါပြီ။");
-      await refresh();
-    } catch (e) { setMessage("အမှား: " + String(e)); }
-    finally { setBusy(false); }
-  }
-
-  async function openProject(item: Project) {
-    setBusy(true);
-    try {
-      setProject(item);
-      setForm({
-        title: item.title, genre: item.genre, duration_seconds: item.duration_seconds,
-        visual_style: item.visual_style, workflow: item.workflow, aspect_ratio: item.aspect_ratio,
-        language: item.language, story_idea: item.story_idea, character_bible: item.character_bible,
-        location_bible: item.location_bible, continuity_notes: item.continuity_notes
-      });
-      setClips(item.clips || await api<Clip[]>("/api/projects/" + item.id + "/clips"));
-      setSelected(0); setMessage("");
-    } catch (e) { setClips([]); setMessage(String(e)); }
-    finally { setBusy(false); }
-  }
-
-  async function regenerate() {
-    if (!project) return;
-    setBusy(true);
-    try {
-      const result = await api<{ clips: Clip[] }>("/api/projects/" + project.id + "/generate", { method: "POST" });
-      setClips(result.clips); setSelected(0); setMessage("Prompt များ ပြန်ထုတ်ပြီး database ထဲ သိမ်းထားပါပြီ။"); await refresh();
-    } catch (e) { setMessage("အမှား: " + String(e)); }
-    finally { setBusy(false); }
-  }
-
-  async function copy(value: string) {
-    try { await navigator.clipboard.writeText(value); setMessage("Copy လုပ်ပြီးပါပြီ။"); }
-    catch { setMessage("Copy မရပါ။ စာသားကို ရွေးပြီး ကူးယူပါ။"); }
-  }
-
-  function download(kind: "txt" | "json") {
-    if (!project || !clips.length) return;
-    const content = kind === "json" ? JSON.stringify({ project, clips }, null, 2) :
-      ["# " + project.title, "Genre: " + project.genre, "Duration: " + project.duration_seconds + "s", "",
-        ...clips.flatMap(c => ["## Clip " + String(c.clip_number).padStart(2, "0") + " | " + c.start_seconds + "s | " + c.duration_seconds + "s",
-          c.beat_title, "", "VISUAL PROMPT:", c.visual_prompt, "", "NEGATIVE PROMPT:", c.negative_prompt,
-          "", "CONTINUITY CHECKLIST:", ...c.continuity_checklist.map(x => "- " + x), "", "------------------------------", ""])].join("\n");
-    const blob = new Blob([content], { type: kind === "json" ? "application/json" : "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob); const link = document.createElement("a");
-    link.href = url; link.download = "ai-film-project-" + project.id + "." + kind; link.click(); URL.revokeObjectURL(url);
-  }
-
-  if (!authReady) return <div className="auth-shell"><div className="panel">AI Film Studio ဖွင့်နေပါသည်…</div></div>;
-  if (!supabaseConfigured || !supabase) return <div className="auth-shell"><section className="panel auth-panel">
-    <div className="logo">AI</div><h1>AI Film Studio</h1><p>Supabase Auth ချိတ်ဆက်ရန် environment variables မပြည့်စုံသေးပါ။</p>
-    <p><code>VITE_SUPABASE_URL</code> နှင့် <code>VITE_SUPABASE_ANON_KEY</code> ကို Vercel project settings ထဲထည့်ပြီး redeploy လုပ်ပါ။</p>
-  </section></div>;
-  if (!session) return <div className="auth-shell"><form className="panel auth-panel" onSubmit={authenticate}>
-    <div className="logo">AI</div><h1>AI FILM STUDIO</h1><p>ကိုယ့်ရဲ့ film project တွေကို သီးသန့်သိမ်းဆည်းဖို့ အကောင့်ဝင်ပါ။</p>
-    <div className="auth-tabs"><button type="button" className={authMode === "login" ? "tab active" : "tab"} onClick={() => setAuthMode("login")}>Login</button><button type="button" className={authMode === "signup" ? "tab active" : "tab"} onClick={() => setAuthMode("signup")}>အကောင့်ဖွင့်ရန်</button></div>
-    <label className="field"><span>Email</span><input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} /></label>
-    <label className="field"><span>Password (အနည်းဆုံး 6 လုံး)</span><input type="password" required minLength={6} autoComplete={authMode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} /></label>
-    {message && <div className="message">{message}</div>}<button className="primary" disabled={busy}>{busy ? "လုပ်ဆောင်နေသည်…" : authMode === "login" ? "Login ဝင်မည်" : "အကောင့်ဖွင့်မည်"}</button>
-    <small className="auth-foot">Gemini နဲ့ Supabase secret key တွေကို browser ထဲ မထည့်ထားပါ။</small>
-  </form></div>;
-
-  const active = clips[selected];
-  return <div className="shell"><header className="topbar"><div className="logo">AI</div><div><b>AI FILM STUDIO</b><small>Story-to-film prompt production workspace</small></div><span className="free-tag">GEMINI · SUPABASE</span><button className="logout" onClick={async () => { if (supabase) await supabase.auth.signOut(); }}>Logout</button></header>
-    <div className="layout"><aside className="sidebar"><div className="side-label">WORKSPACE</div><div className="nav active">▣　Film Project</div><div className="nav">◈　Story & Characters</div><div className="nav">▤　Clip Prompt Planner</div><div className="nav">✓　Continuity Check</div>
-      <div className="side-note"><b>Production workflow</b><p>Gemini က ဇာတ်လမ်းကို scene beat များအဖြစ် ခွဲပြီး video-generation prompt တစ်ခုချင်း ထုတ်ပေးသည်။ Video ကိုယ်တိုင် render မလုပ်ပါ။</p></div>
-      <div className="side-label saved-label">SAVED PROJECTS</div>{projects.map(item => <button key={item.id} className={"saved " + (project?.id === item.id ? "chosen" : "")} onClick={() => openProject(item)}>{item.title}<small>{Math.round(item.duration_seconds / 60 * 10) / 10} min · {item.genre}</small></button>)}
-    </aside>
-    <main className="main"><div className="heading"><div><div className="eyebrow">PRODUCTION / PROJECT SETUP</div><h1>Film Project Brief</h1><p>ဇာတ်လမ်း၊ ဇာတ်ကောင်နဲ့ နေရာအချက်အလက်တွေ ဖြည့်ပါ။ Gemini က ဇာတ်လမ်းအဆက်အစပ်ရှိတဲ့ 8-second clip prompt များ ထုတ်ပေးမယ်။</p></div><span className="mode">✦ AI STORY ANALYSIS</span></div>
-      {message && <div className="message">{message}<button onClick={() => setMessage("")}>×</button></div>}
-      <form className="panel" onSubmit={submit}><div className="section-title"><span>01</span><div><b>Project အချက်အလက်</b><small>ဇာတ်ကားရဲ့ အခြေခံသတ်မှတ်ချက်များ</small></div></div>
-        <div className="grid">
-          <label className="field full"><span>ဇာတ်ကားအမည်</span><input required maxLength={160} value={form.title} onChange={e => change("title", e.target.value)} /></label>
-          <label className="field"><span>Genre / အမျိုးအစား</span><select value={form.genre} onChange={e => change("genre", e.target.value)}>{["Drama","Romance","Mystery","Thriller","Action","Fantasy","Horror","Comedy","Adventure","Mixed"].map(x => <option key={x}>{x}</option>)}</select></label>
-          <label className="field"><span>Visual Style</span><select value={form.visual_style} onChange={e => change("visual_style", e.target.value)}>{["Realistic cinematic","2D cinematic animation","3D animation","Anime-inspired animation","Hand-painted animation","Stop-motion animation"].map(x => <option key={x}>{x}</option>)}</select></label>
-          <label className="field"><span>ကြာချိန် (အများဆုံး 5 မိနစ်)</span><select value={form.duration_seconds} onChange={e => change("duration_seconds", Number(e.target.value))}>{[60,120,180,240,300].map(x => <option value={x} key={x}>{x / 60} မိနစ်</option>)}</select></label>
-          <label className="field"><span>Aspect Ratio</span><select value={form.aspect_ratio} onChange={e => change("aspect_ratio", e.target.value)}><option>16:9</option><option>9:16</option><option>1:1</option></select></label>
-          <label className="field"><span>Workflow</span><select value={form.workflow} onChange={e => change("workflow", e.target.value)}><option value="automatic">Automatic — အလိုအလျောက်</option><option value="manual">Manual — ကိုယ်တိုင်ထိန်းချုပ်</option></select></label>
-          <label className="field"><span>ဇာတ်လမ်း/ယဉ်ကျေးမှုဘာသာစကား</span><select value={form.language} onChange={e => change("language", e.target.value)}><option>Burmese</option><option>English</option><option>Thai</option><option>Chinese</option></select></label>
-        </div>
-        <div className="section-title gap-top"><span>02</span><div><b>Story Development</b><small>ဇာတ်လမ်းကို မြင်ကွင်းတွေအဖြစ် ပြောင်းဖို့ အချက်အလက်များ</small></div></div>
-        <label className="field"><span>Story Idea / ဇာတ်လမ်းအကြောင်း</span><textarea required minLength={10} rows={5} value={form.story_idea} onChange={e => change("story_idea", e.target.value)} /></label>
-        <div className="grid"><label className="field"><span>Character Bible / ဇာတ်ကောင်</span><textarea rows={5} value={form.character_bible} onChange={e => change("character_bible", e.target.value)} placeholder="မျက်နှာ၊ အသက်၊ ဆံပင်၊ အဝတ်အစား၊ ကိုယ်လက်လှုပ်ရှားမှု…" /></label>
-          <label className="field"><span>Location Bible / နေရာ</span><textarea rows={5} value={form.location_bible} onChange={e => change("location_bible", e.target.value)} placeholder="နေရာ၊ အလင်းရောင်၊ ပစ္စည်း၊ အဆောက်အဦ…" /></label>
-          <label className="field full"><span>Continuity Notes / မပြောင်းရမယ့်အချက်များ</span><textarea rows={3} value={form.continuity_notes} onChange={e => change("continuity_notes", e.target.value)} placeholder="မျက်နှာ၊ အဝတ်အစား၊ ပစ္စည်း၊ နေရာ၊ screen direction…" /></label></div>
-        <div className="summary"><div><small>TARGET DURATION</small><b>{Math.floor(Number(form.duration_seconds) / 60)}:{String(Number(form.duration_seconds) % 60).padStart(2,"0")}</b></div><div><small>8-SECOND CLIPS</small><b>{count} clips</b></div><div><small>FINAL CLIP</small><b>{last}s</b></div></div>
-        <button className="primary" disabled={busy}>{busy ? "Gemini က ဇာတ်လမ်းပြင်ဆင်နေသည်…" : "✦ Save Project & Generate AI Prompts"}</button>
-      </form>
-      {clips.length > 0 && <section className="results"><div className="result-heading"><div><div className="eyebrow">GENERATED OUTPUT</div><h2>Clip Prompt Planner</h2><p>{clips.length} clips · {clips.reduce((sum,c) => sum + c.duration_seconds, 0)}s total · Prompts saved to your account</p></div><div className="actions"><button onClick={() => download("txt")}>Export TXT</button><button onClick={() => download("json")}>Export JSON</button><button onClick={regenerate} disabled={busy}>Regenerate</button></div></div>
-        <div className="clip-layout"><div className="clip-list">{clips.map((clip,index) => <button key={clip.clip_number} className={"clip " + (selected === index ? "selected" : "")} onClick={() => setSelected(index)}><span className="num">{String(clip.clip_number).padStart(2,"0")}</span><span className="clip-name"><b>{clip.beat_title}</b><small>{clip.start_seconds}s · {clip.duration_seconds}s</small></span><span>›</span></button>)}</div>
-          {active && <div className="detail"><div className="detail-head"><div><div className="eyebrow">CLIP {String(active.clip_number).padStart(2,"0")}</div><h3>{active.start_seconds}s — {active.start_seconds + active.duration_seconds}s</h3></div><button onClick={() => copy(active.visual_prompt)}>Copy Prompt</button></div>
-            <div className="prompt"><div><b>VISUAL PROMPT</b><button onClick={() => copy(active.visual_prompt)}>Copy</button></div><pre>{active.visual_prompt}</pre></div>
-            <div className="prompt negative"><div><b>NEGATIVE PROMPT</b><button onClick={() => copy(active.negative_prompt)}>Copy</button></div><pre>{active.negative_prompt}</pre></div>
-            <div className="checklist"><b>Continuity Checklist</b>{active.continuity_checklist.map((item,index) => <p key={index}>✓ {item}</p>)}</div>
-          </div>}
-        </div></section>}
-      <footer>AI Film Studio · Gemini text generation · Supabase user-owned project storage · Video rendering is done in an external tool</footer>
-    </main></div></div>;
+ const [session,setSession]=useState<Session|null>(null);
+ const [authReady,setAuthReady]=useState(false);
+ const [authMode,setAuthMode]=useState<"login"|"signup">("login");
+ const [email,setEmail]=useState(""); const [password,setPassword]=useState("");
+ const [form,setForm]=useState<ProjectForm>(defaults);
+ const [projects,setProjects]=useState<Project[]>([]);
+ const [project,setProject]=useState<Project|null>(null);
+ const [pkg,setPkg]=useState<Package|null>(null);
+ const [clips,setClips]=useState<Clip[]>([]);
+ const [stage,setStage]=useState(0); const [selected,setSelected]=useState(0);
+ const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
+ const [messageType,setMessageType]=useState<"ok"|"error"|"info">("info");
+ const count=Math.ceil(Number(form.duration_seconds)/8);
+ function say(text:string,type:"ok"|"error"|"info"="info"){setMessage(text);setMessageType(type);}
+ useEffect(()=>{if(!supabase){setAuthReady(true);return;} supabase.auth.getSession().then(({data})=>{setSession(data.session);setAuthReady(true);}); const {data}=supabase.auth.onAuthStateChange((_event,next)=>{setSession(next);setProjects([]);setProject(null);setPkg(null);setClips([]);});return()=>data.subscription.unsubscribe();},[]);
+ async function api<T>(path:string,init?:RequestInit):Promise<T>{
+  if(!session?.access_token)throw new Error("Login အရင်ဝင်ပါ။");
+  const response=await fetch(API+path,{...init,headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,...(init?.headers||{})}});
+  if(!response.ok){let msg="Request failed "+response.status;try{const data=await response.json();msg=data.detail||msg;}catch{}throw new Error(msg);}
+  if(response.status===204)return undefined as T; return response.json();
+ }
+ async function refresh(){if(!session)return;try{setProjects(await api<Project[]>("/api/projects"));}catch(e){say("Project များ မဖတ်နိုင်ပါ: "+String(e),"error");}}
+ useEffect(()=>{if(session)refresh();},[session?.access_token]);
+ async function authenticate(e:FormEvent){e.preventDefault();if(!supabase)return;setBusy(true);say("");try{const result=authMode==="login"?await supabase.auth.signInWithPassword({email:email.trim(),password}):await supabase.auth.signUp({email:email.trim(),password});if(result.error)throw result.error;say(authMode==="signup"&&!result.data.session?"အကောင့်ဖွင့်ပြီးပါပြီ။ Email confirmation လိုအပ်ပါက email ကိုအတည်ပြုပါ။":"Login အောင်မြင်ပါပြီ။","ok");}catch(e){say("အမှား: "+String(e),"error");}finally{setBusy(false);}}
+ function change<K extends keyof ProjectForm>(key:K,value:ProjectForm[K]){setForm(prev=>({...prev,[key]:value}));}
+ async function saveProject():Promise<Project>{
+  const data={...form,duration_seconds:Number(form.duration_seconds)};
+  if(project){const updated=await api<Project>("/api/projects/"+project.id,{method:"PATCH",body:JSON.stringify(data)});setProject(updated);return updated;}
+  const created=await api<Project>("/api/projects",{method:"POST",body:JSON.stringify(data)});setProject(created);await refresh();return created;
+ }
+ async function analyze(e?:FormEvent){e?.preventDefault();setBusy(true);say("Project သိမ်းပြီး Story Analysis / Production Package ထုတ်နေပါသည်…","info");try{const saved=await saveProject();const result=await api<{production_package:Package;generation_source:string;notice:string}>("/api/projects/"+saved.id+"/analyze",{method:"POST"});setPkg(result.production_package);setClips(saved.clips||[]);setStage(1);say("Story Analysis နှင့် Character/Location/Scene မူကြမ်းများ ပြင်ဆင်ပြီးပါပြီ။ "+result.notice,"ok");await refresh();}catch(e){say("အမှား: "+String(e),"error");}finally{setBusy(false);}}
+ async function savePackage(next:Package){if(!project)throw new Error("Project မရှိသေးပါ။");const result=await api<Package>("/api/projects/"+project.id+"/production",{method:"PATCH",body:JSON.stringify(next)});setPkg(result);return result;}
+ async function makePrompts(){if(!project||!pkg)return;setBusy(true);say("Image/Video Prompt နှင့် continuity checklist ထုတ်နေပါသည်…");try{await savePackage(pkg);const result=await api<{clips:Clip[];generation_source:string}>("/api/projects/"+project.id+"/prompts",{method:"POST"});setClips(result.clips);setSelected(0);setStage(5);say(result.clips.length+" Scene Prompt များ သိမ်းပြီးပါပြီ။ Source: "+result.generation_source,"ok");await refresh();}catch(e){say("Prompt ထုတ်မရပါ: "+String(e),"error");}finally{setBusy(false);}}
+ async function openProject(item:Project){setBusy(true);try{const full=await api<Project>("/api/projects/"+item.id);setProject(full);setForm({title:full.title,genre:full.genre,duration_seconds:full.duration_seconds,visual_style:full.visual_style,workflow:full.workflow,aspect_ratio:full.aspect_ratio,language:full.language,culture:full.culture||"Myanmar",generation_mode:full.generation_mode||"auto",sound_mode:full.sound_mode||"dialogue",story_idea:full.story_idea,character_bible:full.character_bible||"",location_bible:full.location_bible||"",continuity_notes:full.continuity_notes||""});const production=await api<Package>("/api/projects/"+item.id+"/production");setPkg(production&&production.scenes?production:null);setClips(full.clips||await api<Clip[]>("/api/projects/"+item.id+"/clips"));setStage(production?.scenes?4:0);setSelected(0);say("သိမ်းထားသော Project ကို ဖွင့်ပြီးပါပြီ။","ok");}catch(e){say("Project ဖွင့်မရပါ: "+String(e),"error");}finally{setBusy(false);}}
+ function copy(value:string){navigator.clipboard.writeText(value).then(()=>say("ကူးယူပြီးပါပြီ။","ok")).catch(()=>say("Copy မရပါ။ စာသားကို ကိုယ်တိုင်ရွေးကူးပါ။","error"));}
+ function download(kind:"txt"|"json"){const data={project,production_package:pkg,clips};const text=kind==="json"?JSON.stringify(data,null,2):buildTxt(data);const blob=new Blob([text],{type:kind==="json"?"application/json":"text/plain;charset=utf-8"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=(project?.title||"ai-film-project").replace(/[^\p{L}\p{N}-]+/gu,"-")+"."+kind;link.click();URL.revokeObjectURL(url);}
+ function buildTxt(data:{project:Project|null;production_package:Package|null;clips:Clip[]}){const p=data.production_package;return ["AI FILM STUDIO PRODUCTION PACKAGE",data.project?.title||"", "", "STORY ANALYSIS",JSON.stringify(p?.story_analysis||{},null,2),"", "EXPANDED STORY",p?.expanded_story||"", "", "CHARACTER BIBLE",...(p?.characters||[]).flatMap(c=>[c.id+" — "+c.name,c.appearance||"",c.reference_prompt||"", "Reference URL: "+(c.reference_url||""),""]), "LOCATION BIBLE",...(p?.locations||[]).flatMap(l=>[l.id+" — "+l.name,l.environment_lock||"",l.reference_prompt||"","Reference URL: "+(l.reference_url||""),""]), "SCENE & PROMPTS",...data.clips.flatMap(c=>[c.scene_id+" "+c.start_seconds+"s "+c.duration_seconds+"s",c.beat_title,"IMAGE PROMPT:",c.image_prompt||"","VIDEO PROMPT:",c.visual_prompt,"NEGATIVE PROMPT:",c.negative_prompt,"QC:",...(c.continuity_checklist||[]),""])].join("\n");}
+ function patchCharacter(index:number,key:keyof Character,value:string){if(!pkg)return;const chars=[...pkg.characters];chars[index]={...chars[index],[key]:value};setPkg({...pkg,characters:chars});}
+ function patchLocation(index:number,key:keyof LocationAsset,value:string){if(!pkg)return;const items=[...pkg.locations];items[index]={...items[index],[key]:value};setPkg({...pkg,locations:items});}
+ function patchScene(index:number,key:keyof Scene,value:string){if(!pkg)return;const scenes=[...pkg.scenes];scenes[index]={...scenes[index],[key]:value};setPkg({...pkg,scenes});}
+ if(!authReady)return <div className="auth-shell"><div className="panel">AI Film Studio ဖွင့်နေပါသည်…</div></div>;
+ if(!supabaseConfigured||!supabase)return <div className="auth-shell"><section className="panel auth-panel"><div className="logo">AI</div><h1>AI Film Studio</h1><p>Supabase Auth ချိတ်ဆက်ရန် environment variables မပြည့်စုံသေးပါ။</p><p><code>VITE_SUPABASE_URL</code> နှင့် <code>VITE_SUPABASE_ANON_KEY</code> ကို Vercel မှာထည့်ပြီး redeploy လုပ်ပါ။</p></section></div>;
+ if(!session)return <div className="auth-shell"><form className="panel auth-panel" onSubmit={authenticate}><div className="logo">AI</div><h1>AI FILM STUDIO</h1><p>Production Project များကို ကိုယ်ပိုင်အကောင့်တွင် သိမ်းဆည်းရန် Login ဝင်ပါ။</p><div className="auth-tabs"><button type="button" className={authMode==="login"?"tab active":"tab"} onClick={()=>setAuthMode("login")}>Login</button><button type="button" className={authMode==="signup"?"tab active":"tab"} onClick={()=>setAuthMode("signup")}>အကောင့်ဖွင့်ရန်</button></div><label className="field"><span>Email</span><input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label className="field"><span>Password (အနည်းဆုံး 6 လုံး)</span><input type="password" required minLength={6} value={password} onChange={e=>setPassword(e.target.value)}/></label>{message&&<div className="message">{message}</div>}<button className="primary" disabled={busy}>{busy?"လုပ်ဆောင်နေသည်…":authMode==="login"?"Login ဝင်မည်":"အကောင့်ဖွင့်မည်"}</button><small className="auth-foot">Gemini key ကို server ဘက်မှာသာ သိမ်းထားသည်။</small></form></div>;
+ const active=clips[selected];
+ return <div className="shell"><header className="topbar"><div className="logo">AI</div><div><b>AI FILM STUDIO</b><small>Story-to-film production workspace</small></div><span className="free-tag">{form.generation_mode.toUpperCase()} · {form.generation_mode==="template"?"NO API":"GEMINI READY"}</span><button className="logout" onClick={async()=>{if(supabase)await supabase.auth.signOut();}}>Logout</button></header>
+ <div className="layout"><aside className="sidebar"><div className="side-label">PRODUCTION WORKFLOW</div>{stages.map((name,i)=><button key={name} className={"saved "+(stage===i?"chosen":"")} onClick={()=>setStage(i)}>{String(i+1).padStart(2,"0")}　{name}<small>{stageDescriptions[i]}</small></button>)}<div className="side-note"><b>Reference Lock</b><p>CHAR / LOC / WARD / PROP ID များကို အဆင့်တိုင်းမှာ ဆက်စပ်အသုံးပြုမည်။ ID တစ်ခုတည်းဖြင့် external video AI က reference ကို အလိုအလျောက်သိမည်မဟုတ်ပါ။ ပုံကိုလည်း သက်ဆိုင်ရာ tool ထဲ တွဲထည့်ရမည်။</p></div><div className="side-label saved-label">SAVED PROJECTS</div>{projects.map(item=><button key={item.id} className={"saved "+(project?.id===item.id?"chosen":"")} onClick={()=>openProject(item)}>{item.title}<small>{Math.round(item.duration_seconds/60*10)/10} min · {item.generation_mode||"auto"}</small></button>)}<button className="actions" onClick={()=>{setProject(null);setPkg(null);setClips([]);setForm(defaults);setStage(0);say("Project အသစ်အတွက် Form ပြန်ဖွင့်ထားပါသည်။");}}>＋ Project အသစ်</button></aside>
+ <main className="main"><div className="heading"><div><div className="eyebrow">PRODUCTION / STAGE {String(stage+1).padStart(2,"0")}</div><h1>{stages[stage]}</h1><p>{stageDescriptions[stage]}. အဆင့်တစ်ခုစီကို စစ်ဆေးပြင်ဆင်ပြီးမှ နောက်အဆင့်သို့ ဆက်သွားပါ။</p></div><span className="mode">{form.generation_mode==="template"?"RULE-BASED TEMPLATE":form.generation_mode==="gemini"?"GEMINI REQUIRED":"GEMINI + FALLBACK"}</span></div>
+ {message&&<div className={"message "+(messageType==="error"?"error-message":"")}>{message}<button onClick={()=>setMessage("")}>×</button></div>}
+ {stage===0&&<form className="panel" onSubmit={analyze}><div className="section-title"><span>01</span><div><b>Project & Story Brief</b><small>အခြေခံ Settings နှင့် ဇာတ်လမ်းအကျဉ်း</small></div></div><div className="grid">
+ <label className="field full"><span>ဇာတ်ကားအမည်</span><input required maxLength={160} value={form.title} onChange={e=>change("title",e.target.value)}/></label>
+ <label className="field"><span>Genre / အမျိုးအစား</span><select value={form.genre} onChange={e=>change("genre",e.target.value)}>{["Drama","Romance","Mystery","Thriller","Action","Fantasy","Horror","Comedy","Adventure","Mixed"].map(x=><option key={x}>{x}</option>)}</select></label>
+ <label className="field"><span>Generation Mode</span><select value={form.generation_mode} onChange={e=>change("generation_mode",e.target.value)}><option value="auto">Auto — Gemini + Template Fallback</option><option value="gemini">Gemini AI — Gemini မရလျှင် error ပြမည်</option><option value="template">Template — Gemini API မခေါ်ပါ</option></select></label>
+ <label className="field"><span>ကြာချိန်</span><select value={form.duration_seconds} onChange={e=>change("duration_seconds",Number(e.target.value))}>{[60,120,180,240,300].map(x=><option value={x} key={x}>{x/60} မိနစ် ({Math.ceil(x/8)} clips)</option>)}</select></label>
+ <label className="field"><span>Aspect Ratio</span><select value={form.aspect_ratio} onChange={e=>change("aspect_ratio",e.target.value)}><option>9:16</option><option>16:9</option><option>1:1</option></select></label>
+ <label className="field"><span>Visual Style</span><select value={form.visual_style} onChange={e=>change("visual_style",e.target.value)}>{["Realistic cinematic","2D cinematic animation","3D animation","Anime-inspired animation","Hand-painted animation","Stop-motion animation","ASMR cinematic"].map(x=><option key={x}>{x}</option>)}</select></label>
+ <label className="field"><span>Dialogue / Output Language</span><select value={form.language} onChange={e=>change("language",e.target.value)}><option>Burmese</option><option>English</option><option>Thai</option><option>Chinese</option></select></label>
+ <label className="field"><span>Culture / ယဉ်ကျေးမှု</span><select value={form.culture} onChange={e=>change("culture",e.target.value)}><option>Myanmar</option><option>Chinese</option><option>Thai</option><option>Western</option><option>Custom / Mixed</option></select></label>
+ <label className="field"><span>Sound Plan</span><select value={form.sound_mode} onChange={e=>change("sound_mode",e.target.value)}><option value="dialogue">Dialogue + Ambient</option><option value="narration">Narration + Ambient</option><option value="both">Dialogue + Narration</option><option value="silent">Silent Visual</option></select></label>
+ <label className="field"><span>Workflow</span><select value={form.workflow} onChange={e=>change("workflow",e.target.value)}><option value="automatic">Guided / အဆင့်လိုက်</option><option value="manual">Manual / ကိုယ်တိုင်ထိန်းချုပ်</option></select></label></div>
+ <div className="section-title gap-top"><span>02</span><div><b>Story Input</b><small>ဇာတ်လမ်းအကျဉ်း သို့မဟုတ် ဇာတ်လမ်းအပြည့်</small></div></div><label className="field"><span>Story Idea</span><textarea required minLength={10} rows={6} value={form.story_idea} onChange={e=>change("story_idea",e.target.value)}/></label>
+ <label className="field"><span>Character Bible (ရှိပြီးသားဆိုရင် တစ်ကြောင်းတစ်ယောက်)</span><textarea rows={4} value={form.character_bible} onChange={e=>change("character_bible",e.target.value)} placeholder="မောင်မောင် — အသက် ၂၅၊ ဆံပင်အနက်၊ မျက်နှာ…"/></label><label className="field"><span>Location Bible (တစ်ကြောင်းတစ်နေရာ၊ LOC-A — ...)</span><textarea rows={4} value={form.location_bible} onChange={e=>change("location_bible",e.target.value)} placeholder="LOC-A — အိမ်အပြင်ဘက်…"/></label><label className="field"><span>Continuity Notes</span><textarea rows={3} value={form.continuity_notes} onChange={e=>change("continuity_notes",e.target.value)}/></label>
+ <div className="summary"><div><small>TARGET</small><b>{Math.floor(form.duration_seconds/60)}:{String(form.duration_seconds%60).padStart(2,"0")}</b></div><div><small>8-SECOND CLIPS</small><b>{count} clips</b></div><div><small>FINAL CLIP</small><b>{form.duration_seconds%8||8}s</b></div></div><button className="primary" disabled={busy}>{busy?"Production package ထုတ်နေသည်…":"Save & Start Story Analysis →"}</button></form>}
+ {stage===1&&pkg&&<section className="panel"><div className="section-title"><span>02</span><div><b>Story Analysis & Expanded Story</b><small>ဇာတ်လမ်းအဓိပ္ပာယ်၊ ပဋိပက္ခ၊ Turning Point နှင့် အဆုံးသတ်</small></div></div><div className="message">{pkg.notice||"Analysis draft"} · Source: {pkg.generation_source}</div><label className="field"><span>Expanded Story / ဇာတ်လမ်းအပြည့် (ပြင်ဆင်နိုင်သည်)</span><textarea rows={9} value={pkg.expanded_story||""} onChange={e=>setPkg({...pkg,expanded_story:e.target.value})}/></label><div className="grid">{Object.entries(pkg.story_analysis||{}).map(([key,value])=><label className="field" key={key}><span>{key.replaceAll("_"," ")}</span><textarea rows={3} value={Array.isArray(value)?value.join("\n"):String(value??"")} onChange={e=>setPkg({...pkg,story_analysis:{...pkg.story_analysis,[key]:key==="assumptions_to_confirm"?e.target.value.split("\n"):e.target.value}})}/></label>)}</div><button className="primary" disabled={busy} onClick={async()=>{setBusy(true);try{await savePackage(pkg);setStage(2);say("Story Analysis သိမ်းပြီးပါပြီ။ Character Bible ကို စစ်ဆေးပါ။","ok");}catch(e){say(String(e),"error");}finally{setBusy(false);}}}>Approve Story & Continue →</button><p className="auth-foot">Template Mode သည် AI reasoning မလုပ်ပါ။ Story Idea ကို အခြေခံ၍ production framework ဖန်တီးပေးပြီး မသေချာသော အချက်များကို အတည်ပြုရန် ပြထားသည်။</p></section>}
+ {stage===2&&pkg&&<section className="panel"><div className="section-title"><span>03</span><div><b>Character Bible & Reference Prompts</b><small>Character ID ကို အမြဲတမ်းတူညီစွာ အသုံးပြုပါ။</small></div></div>{pkg.characters.map((c,i)=><article className="asset-card" key={c.id}><div className="asset-head"><span className="num">{c.id}</span><b>{c.name}</b></div><div className="grid"><label className="field"><span>Character Name</span><input value={c.name} onChange={e=>patchCharacter(i,"name",e.target.value)}/></label><label className="field"><span>Age</span><input value={c.age||""} onChange={e=>patchCharacter(i,"age",e.target.value)}/></label><label className="field full"><span>Appearance / ရုပ်ရည်</span><textarea rows={3} value={c.appearance||""} onChange={e=>patchCharacter(i,"appearance",e.target.value)}/></label><label className="field full"><span>Reference Image URL (ကိုယ်တိုင် generate ပြီး URL ရှိပါက)</span><input value={c.reference_url||""} onChange={e=>patchCharacter(i,"reference_url",e.target.value)} placeholder="https://..."/></label></div><div className="prompt"><div><b>CHARACTER SHEET PROMPT</b><button onClick={()=>copy(c.reference_prompt||"")}>Copy</button></div><pre>{c.reference_prompt}</pre></div><button className="actions" onClick={()=>copy(c.reference_prompt||"")}>Copy Character Prompt</button></article>)}<button className="primary" disabled={busy} onClick={async()=>{setBusy(true);try{await savePackage(pkg);setStage(3);say("Character Bible သိမ်းပြီးပါပြီ။","ok");}catch(e){say(String(e),"error");}finally{setBusy(false);}}}>Approve Characters & Continue →</button></section>}
+ {stage===3&&pkg&&<section className="panel"><div className="section-title"><span>04</span><div><b>Location & Prop Bible</b><small>တည်နေရာနဲ့ အရေးကြီးပစ္စည်းများကို lock လုပ်ပါ။</small></div></div>{pkg.locations.map((loc,i)=><article className="asset-card" key={loc.id}><div className="asset-head"><span className="num">{loc.id}</span><b>{loc.name}</b></div><label className="field"><span>Location Name</span><input value={loc.name} onChange={e=>patchLocation(i,"name",e.target.value)}/></label><label className="field"><span>Environment Lock</span><textarea rows={3} value={loc.environment_lock||""} onChange={e=>patchLocation(i,"environment_lock",e.target.value)}/></label><label className="field"><span>Reference Image URL</span><input value={loc.reference_url||""} onChange={e=>patchLocation(i,"reference_url",e.target.value)} placeholder="https://..."/></label><div className="prompt"><div><b>LOCATION / BACKGROUND SHEET PROMPT</b><button onClick={()=>copy(loc.reference_prompt||"")}>Copy</button></div><pre>{loc.reference_prompt}</pre></div></article>)}<div className="section-title gap-top"><span>PROP</span><div><b>Prop Bible</b><small>အိတ်၊ စာအိတ်၊ ဖုန်း စသည့် continuity အရေးကြီးပစ္စည်းများ</small></div></div>{(pkg.props||[]).map(p=><p key={p.id} className="checklist">{p.id} — {p.name}: {p.description}</p>)}<button className="primary" disabled={busy} onClick={async()=>{setBusy(true);try{await savePackage(pkg);setStage(4);say("Location Bible သိမ်းပြီးပါပြီ။ Scene Breakdown ကို စစ်ပါ။","ok");}catch(e){say(String(e),"error");}finally{setBusy(false);}}}>Approve Locations & Continue →</button></section>}
+ {stage===4&&pkg&&<section className="panel"><div className="section-title"><span>05</span><div><b>Scene Breakdown & Shooting Plan</b><small>{pkg.scenes.length} scenes · {form.duration_seconds}s total · 8s maximum per clip</small></div></div>{pkg.quality_report&&<div className="checklist"><b>Production QC: {pkg.quality_report.passed?"PASS":"NEEDS REVIEW"}</b>{pkg.quality_report.issues.map((x,i)=><p key={i}>⚠ {x}</p>)}</div>}{pkg.scenes.map((s,i)=><article className="asset-card" key={s.scene_id}><div className="asset-head"><span className="num">{s.scene_id}</span><b>{s.beat_title}</b><small>{s.start_seconds}s · {s.duration_seconds}s</small></div><div className="grid"><label className="field"><span>Beat Title</span><input value={s.beat_title} onChange={e=>patchScene(i,"beat_title",e.target.value)}/></label><label className="field"><span>Location ID</span><select value={s.location_id||""} onChange={e=>patchScene(i,"location_id",e.target.value)}>{pkg.locations.map(l=><option key={l.id} value={l.id}>{l.id} — {l.name}</option>)}</select></label><label className="field full"><span>Action / မြင်ကွင်းအတွင်း လုပ်ဆောင်ချက်</span><textarea rows={3} value={s.action||""} onChange={e=>patchScene(i,"action",e.target.value)}/></label><label className="field full"><span>Dialogue / တိကျသောစကားပြော</span><textarea rows={2} value={s.dialogue||""} onChange={e=>patchScene(i,"dialogue",e.target.value)}/></label><label className="field"><span>Shot Size</span><input value={s.shot_size||""} onChange={e=>patchScene(i,"shot_size",e.target.value)}/></label><label className="field"><span>Camera Angle</span><input value={s.camera_angle||""} onChange={e=>patchScene(i,"camera_angle",e.target.value)}/></label><label className="field"><span>Camera Movement</span><input value={s.camera_movement||""} onChange={e=>patchScene(i,"camera_movement",e.target.value)}/></label><label className="field"><span>Lighting</span><input value={s.lighting||""} onChange={e=>patchScene(i,"lighting",e.target.value)}/></label><label className="field full"><span>Character IDs (comma separated)</span><input value={(s.character_ids||[]).join(", ")} onChange={e=>{if(!pkg)return;const scenes=[...pkg.scenes];scenes[i]={...scenes[i],character_ids:e.target.value.split(",").map(x=>x.trim()).filter(Boolean)};setPkg({...pkg,scenes});}}/></label></div><p className="auth-foot">Character IDs: {(s.character_ids||[]).join(", ")||"မသတ်မှတ်ရသေး"} · Location: {s.location_id}</p></article>)}<button className="primary" disabled={busy} onClick={async()=>{setBusy(true);try{await savePackage(pkg);setStage(5);say("Scene Plan သိမ်းပြီးပါပြီ။ Prompt ထုတ်နိုင်ပါပြီ။","ok");}catch(e){say(String(e),"error");}finally{setBusy(false);}}}>Approve Scene Plan & Continue →</button></section>}
+ {stage===5&&<section className="results"><div className="result-heading"><div><div className="eyebrow">FINAL PRODUCTION OUTPUT</div><h2>Image & Video Prompt Planner</h2><p>{clips.length} scenes · {clips.reduce((n,c)=>n+c.duration_seconds,0)} seconds · ID references included</p></div><div className="actions"><button onClick={()=>download("txt")}>Export TXT</button><button onClick={()=>download("json")}>Export JSON</button><button onClick={makePrompts} disabled={busy||!pkg}>Generate / Refresh Prompts</button></div></div>{clips.length===0?<div className="panel"><p>Scene Plan ကို အတည်ပြုပြီး Prompt Package ထုတ်ပါ။</p><button className="primary" onClick={makePrompts} disabled={busy||!pkg}>Generate Image & Video Prompts</button></div>:<div className="clip-layout"><div className="clip-list">{clips.map((c,i)=><button key={c.scene_id||c.clip_number} className={"clip "+(selected===i?"selected":"")} onClick={()=>setSelected(i)}><span className="num">{String(c.clip_number).padStart(2,"0")}</span><span className="clip-name"><b>{c.beat_title}</b><small>{c.start_seconds}s · {c.duration_seconds}s</small></span><span>›</span></button>)}</div>{active&&<div className="detail"><div className="detail-head"><div><div className="eyebrow">{active.scene_id||"CLIP "+active.clip_number}</div><h3>{active.start_seconds}s — {active.start_seconds+active.duration_seconds}s</h3><p>Characters: {(active.character_ids||[]).join(", ")} · Location: {active.location_id}</p></div><button onClick={()=>copy(active.visual_prompt)}>Copy Video Prompt</button></div><div className="prompt"><div><b>IMAGE PROMPT</b><button onClick={()=>copy(active.image_prompt||"")}>Copy</button></div><pre>{active.image_prompt||"မရှိသေးပါ"}</pre></div><div className="prompt"><div><b>VIDEO PROMPT</b><button onClick={()=>copy(active.visual_prompt)}>Copy</button></div><pre>{active.visual_prompt}</pre></div><div className="prompt negative"><div><b>NEGATIVE PROMPT</b><button onClick={()=>copy(active.negative_prompt)}>Copy</button></div><pre>{active.negative_prompt}</pre></div><div className="checklist"><b>Continuity / QC Checklist</b>{active.continuity_checklist.map((x,i)=><p key={i}>✓ {x}</p>)}</div></div>}</div>}</section>}
+ <footer>AI Film Studio · Gemini AI / rules-based template · Supabase project storage · External tool required to render images and videos</footer></main></div></div>;
 }
