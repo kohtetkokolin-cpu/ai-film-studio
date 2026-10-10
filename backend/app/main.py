@@ -354,6 +354,115 @@ def validate_package(package: dict[str, Any], duration: int) -> dict[str, Any]:
     return {"passed": not issues, "issues": issues, "scene_count": len(scenes), "total_seconds": total}
 
 
+
+VISUAL_STYLE_GUIDES = {
+ "Realistic cinematic": "photorealistic live-action, physically plausible skin and materials, naturalistic performances, restrained film color grade",
+ "Hollywood blockbuster": "large-scale cinematic composition, motivated dramatic lighting, controlled spectacle, polished live-action production design",
+ "Neo-noir": "deep shadow, motivated practical lights, selective highlights, urban tension, noir contrast, restrained desaturated palette",
+ "Film noir": "black-and-white high-contrast chiaroscuro, hard key light, expressive shadows, smoky atmosphere where appropriate",
+ "Indie naturalism": "observational framing, natural available light, lived-in production design, subtle performances, restrained grade",
+ "Documentary realism": "credible documentary camera, available light, grounded environments, observational movement, no glossy fantasy look",
+ "Found-footage horror": "diegetic handheld camera, imperfect framing, realistic exposure, grounded practical lighting, sustained spatial geography",
+ "Period drama": "historically coherent wardrobe, props, architecture and materials for the specified era; no anachronisms",
+ "Historical epic": "period-accurate production design, layered wide compositions, naturalistic spectacle, consistent historically informed costume",
+ "Wuxia": "stylized martial-arts choreography, elegant readable movement, period Chinese visual design, controlled wire-like movement only if requested",
+ "Xianxia fantasy": "Chinese immortal-fantasy visual language, ethereal atmosphere, ornate original costumes, restrained magical VFX with consistent rules",
+ "Chinese costume drama": "coherent Chinese historical-inspired architecture, hair, garments and props; distinguish fantasy from strict historical realism",
+ "Thai lakorn drama": "expressive contemporary melodrama, Thai cultural context and wardrobe, polished television-drama lighting",
+ "Myanmar traditional drama": "Myanmar cultural authenticity in clothing, architecture, gestures and props, with the selected era respected",
+ "K-drama polished realism": "polished contemporary Korean drama cinematography, clean skin tones, carefully controlled highlights, emotionally precise close-ups",
+ "Japanese cinema realism": "restrained composition, naturalistic performance, careful negative space and motivated light",
+ "Bollywood musical spectacle": "vivid color, choreographed visual scale and expressive movement; add musical spectacle only where story calls for it",
+ "Gritty crime thriller": "grounded locations, practical light sources, tactile textures, controlled handheld or deliberate tracking, muted palette",
+ "Psychological thriller": "subjective framing, negative space, controlled focus, visual tension and motivated shifts in camera distance",
+ "Gothic horror": "old-world textures, layered shadow, motivated candle or moonlight, oppressive architecture, no arbitrary gore",
+ "Supernatural horror": "grounded physical world with restrained supernatural cues, stable lighting logic, controlled reveal timing",
+ "Dark fantasy": "coherent original fantasy design, deep tonal contrast, tactile materials, motivated magical effects",
+ "High fantasy epic": "grand readable environments, consistent world-building, designed costumes and props, cinematic scale without random detail",
+ "Magical realism": "everyday believable environments with one subtle extraordinary element, understated effects and natural performances",
+ "Cyberpunk neon": "night-city reflections, practical neon sources, controlled cyan-magenta accents, readable faces and coherent futuristic props",
+ "Science fiction hard realism": "functional engineering, physically coherent technology, restrained VFX and plausible light interaction",
+ "Space opera": "grand cosmic scale, clear silhouettes, designed spacecraft and practical-looking light sources",
+ "Post-apocalyptic": "weathered materials, scarcity-driven props, coherent environmental decay and practical survival clothing",
+ "Dieselpunk": "industrial retro-futurist machinery, aged metal, period-consistent silhouettes and smoke only when motivated",
+ "Steampunk": "brass, leather, gears and Victorian-inspired retro-tech used consistently, functional prop design",
+ "Western frontier": "frontier landscapes, weathered materials, motivated sunlight, era-coherent clothing and props",
+ "Romantic soft-focus": "gentle diffusion, warm skin tones, delicate highlights and emotionally motivated shallow depth of field without losing continuity",
+ "Vintage 1970s film": "1970s film-stock character, restrained grain, era-appropriate palette and production design",
+ "1980s retro film": "1980s lens and color character, era-appropriate props and wardrobe, controlled period texture",
+ "1990s nostalgic film": "1990s film color response, natural grain, era-coherent props and grounded nostalgic mood",
+ "Black-and-white monochrome": "true monochrome tonal separation, expressive luminance contrast, no color accents",
+ "Technicolor classic": "rich controlled primary colors, classic studio composition and era-coherent design",
+ "2D cinematic animation": "hand-designed 2D animation, deliberate line weight, consistent character model sheets, layered backgrounds and authored motion",
+ "Anime-inspired animation": "original anime-inspired design, consistent line art, expressive but controlled faces, authored cel shading and intentional motion",
+ "Japanese anime cel": "clean cel-shaded forms, clear line hierarchy, designed key poses, coherent anime backgrounds and consistent model proportions",
+ "Watercolor animation": "translucent watercolor washes, visible paper texture, soft pigment edges and stable character designs",
+ "Hand-painted animation": "painted frame aesthetic, consistent brushwork, carefully controlled palette and designed movement",
+ "Studio Ghibli-inspired original animation": "original hand-painted Japanese fantasy animation aesthetic, natural environments, gentle observational movement; do not copy any existing character or shot",
+ "European storybook illustration": "original illustrated storybook shapes, textured paint, graphic silhouettes and carefully composed backgrounds",
+ "Disney-like family 3D (original characters)": "expressive stylized 3D family animation, appealing silhouettes, polished materials and consistent original character models",
+ "Pixar-like stylized 3D (original characters)": "high-quality stylized 3D character acting, appealing shapes, nuanced materials and original non-franchise designs",
+ "Stylized 3D animation": "consistent stylized 3D geometry, designed material response, stable proportions and clear keyframe-like motion",
+ "Photorealistic CGI": "photoreal CGI shading, accurate material response, physically plausible lighting, coherent rendering and camera optics",
+ "Unreal Engine cinematic": "real-time-engine cinematic realism, physically based materials, volumetric light only when motivated, controlled depth of field",
+ "Claymation stop-motion": "tactile clay surfaces, miniature-scale lighting, frame-by-frame stop-motion cadence and consistent handcrafted models",
+ "Puppet stop-motion": "physical puppet materials, miniature sets, frame-by-frame motion, consistent rig and set geography",
+ "Paper cut-out animation": "layered paper shapes, visible paper fibers, cut edges, multiplane depth and deliberate limited movement",
+ "Laika-style stop-motion (original design)": "handcrafted stop-motion feature aesthetic, tactile miniature sets and expressive original puppets; do not copy existing characters",
+ "Comic-book ink": "bold ink contours, graphic shadow shapes, selective halftone texture and stable panel-like composition",
+ "Graphic novel": "cinematic graphic-novel composition, intentional ink lines, controlled color blocks and consistent character drawing",
+ "Western comic art": "confident contour lines, dramatic inking, clear anatomy and authored panel-like framing",
+ "Manga black-and-white": "black-and-white manga linework, screentone values, expressive but consistent faces and clean silhouette readability",
+ "Manhwa color webtoon": "polished vertical-webtoon color rendering, clean contours, controlled gradients and consistent character proportions",
+ "Motion-comic": "illustrated source art with restrained parallax, selective camera movement and limited animated elements",
+ "Pixel art": "consistent pixel grid, deliberate limited palette, readable pixel silhouettes and no accidental smoothing",
+ "Voxel 3D": "voxel-based geometry, consistent block scale, readable lighting and stable object proportions",
+ "Low-poly 3D": "intentional low-polygon geometry, faceted surfaces, coherent color blocks and consistent scale",
+ "Isometric diorama": "isometric camera, miniature diorama construction, consistent perspective and carefully placed small-scale props",
+ "Miniature model photography": "macro lens on practical miniatures, believable scale cues, shallow depth of field and physically coherent lighting",
+ "LEGO-like brick animation": "interlocking toy-brick material and proportions, stop-motion-like movement and consistent original builds",
+ "Puppet theatre": "visible handcrafted puppet aesthetic, stage-like composition, controlled practical lighting and consistent puppet movement",
+ "Shadow-puppet art": "flat cut-out silhouettes, translucent screen glow, theatrical backlight and deliberate shadow movement",
+ "Traditional Burmese painting": "Myanmar traditional painting vocabulary, culturally coherent motifs, flat decorative space and hand-rendered pigment texture",
+ "Chinese ink wash painting": "ink wash brushwork, expressive negative space, soft ink diffusion and limited mineral color",
+ "Japanese sumi-e": "economical ink brushwork, expressive negative space, monochrome ink values and deliberate strokes",
+ "Ukiyo-e woodblock": "flat woodblock-print color fields, bold outlines, stylized perspective and visible print texture",
+ "Thai traditional mural": "Thai mural-inspired linework, decorative patterning and culturally informed color and costume design",
+ "South Asian miniature painting": "fine miniature-painting detail, flattened spatial hierarchy, patterned textiles and coherent regional motifs",
+ "Persian miniature art": "intricate miniature painting, decorative architecture, patterned surfaces and flattened poetic spatial design",
+ "Art nouveau": "organic flowing contours, botanical ornament, elegant asymmetry and period-informed decorative composition",
+ "Art deco": "geometric symmetry, streamlined silhouettes, metallic accents and controlled luxury-era design",
+ "Impressionist painting": "visible painterly brushwork, broken color, atmospheric light and impressionistic rather than photoreal surfaces",
+ "Expressionist painting": "emotionally distorted shapes, bold directional strokes, deliberate color tension and expressive perspective",
+ "Surrealist cinema": "dream logic, precise impossible imagery, controlled surreal transitions and coherent visual motifs",
+ "Oil-painting animation": "visible oil-paint texture, layered brush strokes, stable painted forms and art-directed movement",
+ "Pastel illustration": "soft pastel grain, gentle edges, muted color transitions and consistent illustrated anatomy",
+ "Charcoal sketch": "charcoal texture, expressive line, tonal smudging and high-contrast hand-drawn composition",
+ "Pencil storyboard": "clear pencil line, storyboard readability, simple value blocking and explicit action staging",
+ "Paper collage": "layered cut-paper textures, visible edges, mixed-media composition and deliberate depth",
+ "Retro-futurism": "future imagined through a coherent historical design language, analog controls and intentional retro materials",
+ "Vaporwave": "surreal retro-digital palette, synthetic gradients, nostalgic architecture and stylized composition",
+ "Synthwave": "neon sunset palette, graphic rim lights, retro-futurist silhouettes and deliberate high contrast",
+ "Y2K digital aesthetic": "early-digital-era glossy materials, chrome accents, playful futuristic geometry and coherent period design",
+ "Luxury fashion editorial": "high-end fashion photography, deliberate pose, controlled studio lighting, fabric detail and editorial composition",
+ "Beauty commercial": "clean beauty lighting, accurate skin texture, macro detail and polished but believable product framing",
+ "Food macro ASMR": "macro food texture, appetizing realistic light, clear tactile actions and no distracting visual clutter",
+ "Satisfying process ASMR": "precise tactile close-ups, deliberate repeatable hand action, clear material textures and calm controlled framing",
+ "Nature documentary": "credible natural-history cinematography, observational camera, natural light and realistic animal/environment behavior",
+ "Wildlife cinematic": "long-lens wildlife framing, physically plausible animal behavior, natural habitats and restrained color grading",
+ "Travel-film aesthetic": "place-specific visual detail, motivated natural light, coherent travel-documentary camera language",
+ "Music-video stylized": "rhythmic composition and deliberate movement, visually coherent palette and effects synchronized to intended mood",
+ "Dreamlike soft fantasy": "soft atmospheric depth, subtle magical imagery, gentle light bloom and stable character/environment design",
+ "Minimalist architectural film": "precise architectural geometry, clean lines, controlled daylight and deliberate camera movement"
+}
+
+def _style_direction(style: str) -> str:
+    guide = VISUAL_STYLE_GUIDES.get(style)
+    if guide:
+        return guide
+    return f"Honor the exact requested art direction: {style}. Make its defining materials, linework/rendering, color logic, lighting, motion language and production design explicit; do not default to generic photorealistic live action."
+
+
 def generate_gemini_package(project: dict[str, Any]) -> dict[str, Any]:
     if not GEMINI_API_KEY:
         raise RuntimeError("Gemini API key မထည့်ရသေးပါ။")
@@ -375,7 +484,7 @@ Return exactly this structure:
 Need exactly {count} scenes, total duration {duration} seconds, each 8 seconds except final remainder. Use 8-second maximum. Character/location IDs must be stable and references linked. Every scene must move the plot, not just show generic scenery. Build a logical beginning, escalation, turning point, consequence and ending suitable to the duration. Avoid unsupported assumptions; put them in assumptions_to_confirm. Dialogue must be short enough to speak naturally within clip duration. Cultural setting must match user selection.
 Title: {project.get('title')}
 Genre: {project.get('genre')}
-Visual style: {project.get('visual_style')}
+Visual style: {project.get('visual_style')}\nSTYLE EXECUTION GUIDE: {_style_direction(str(project.get('visual_style') or 'Realistic cinematic'))}\nSTYLE LOCK: Every character sheet, location sheet, image prompt and video prompt must use the same selected visual medium. Do not blend styles or drift back to photorealism unless selected.
 Culture: {project.get('culture')}
 Language: {project.get('language')}
 Aspect ratio: {project.get('aspect_ratio')}
@@ -457,11 +566,11 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
         movement = str(scene.get("camera_movement") or "subtle controlled camera movement")
         lighting = str(scene.get("lighting") or "motivated cinematic lighting")
         culture = str(project.get("culture") or "as established in references")
-        style = str(project.get("visual_style") or "Realistic cinematic")
+        style = str(project.get("visual_style") or "Realistic cinematic")\n        style_direction = _style_direction(style)
         ratio = str(project.get("aspect_ratio") or "16:9")
         char_urls = ", ".join(f"{ch.get('id')}: {ch.get('reference_url')}" for ch in char_refs if ch.get("reference_url"))
         loc_url = loc.get("reference_url") or "manually attach the saved location reference image"
-        common = f"Approved reference assets: {', '.join(ch.get('id','') for ch in char_refs)} and {loc.get('id','LOC-?')}. Character reference URLs if accessible: {char_urls or 'no URL saved; manually attach reference images'}. Location reference URL if accessible: {loc_url}. Character references: {char_text}. Location reference: {location_text}. Wardrobe lock: {wardrobe or 'use approved character wardrobe'}. Props: {prop_text or 'only story-required props'}. Culture: {culture}. Visual style: {style}. Aspect ratio {ratio}. Keep faces, ages, hairstyles, body proportions, wardrobe, architecture, object positions and screen direction consistent. No additional characters, no text, no subtitles, no logos or watermark."
+        common = f"Approved reference assets: {', '.join(ch.get('id','') for ch in char_refs)} and {loc.get('id','LOC-?')}. Character reference URLs if accessible: {char_urls or 'no URL saved; manually attach reference images'}. Location reference URL if accessible: {loc_url}. Character references: {char_text}. Location reference: {location_text}. Wardrobe lock: {wardrobe or 'use approved character wardrobe'}. Props: {prop_text or 'only story-required props'}. Culture: {culture}. Visual style: {style}. Style execution: {style_direction}. Apply the selected medium consistently to faces, materials, edges/linework, shading/rendering, lighting, motion, background design and color grade. Do not switch to another visual medium. Aspect ratio {ratio}. Keep faces, ages, hairstyles, body proportions, wardrobe, architecture, object positions and screen direction consistent. No additional characters, no text, no subtitles, no logos or watermark."
         image_prompt = f"Create a cinematic still for {scene.get('scene_id')}. {common} Action and dramatic purpose: {action}. Shot composition: {shot}, {angle}. Lighting and color: {lighting}. Mood should support {scene.get('dramatic_purpose','the story beat')}. One coherent frame, believable anatomy and physically plausible staging."
         video_prompt = f"Use the saved reference images for {', '.join(c.get('id','') for c in char_refs) or 'the approved characters'} and location {loc.get('id','LOC-?')}. Create one continuous {scene.get('duration_seconds',8)}-second shot. Action over time: {action}. Dialogue in {project.get('language','Burmese')}: {dialogue if dialogue and dialogue.lower() not in {'none','n/a','မရှိ'} else 'No spoken dialogue; use natural environmental sound only.'} Shot: {shot}, {angle}. Camera movement: {movement}. Lighting: {lighting}. Natural facial expressions and body movement, plausible timing, clear speaker/listener behavior, no accidental lip movement for silent characters. {common}"
         out.append({
