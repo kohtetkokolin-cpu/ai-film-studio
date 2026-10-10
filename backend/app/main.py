@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
@@ -184,7 +185,14 @@ Each checklist should contain 3-6 concrete continuity checks. Return exactly {co
 """
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                max_output_tokens=32768,
+            ),
+        )
         data = parse_json_response(response.text or "")
         raw = data.get("clips")
         if not isinstance(raw, list) or len(raw) != count:
