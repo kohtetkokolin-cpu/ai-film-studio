@@ -166,7 +166,7 @@ export default function App() {
   </form></div>;
 
   const active = clips[selected];
-  return <div className="shell"><header className="topbar"><div className="logo">AI</div><div><b>AI FILM STUDIO</b><small>Story-to-film prompt production workspace</small></div><span className="free-tag">GEMINI · SUPABASE</span><button className="logout" onClick={async () => { await supabase.auth.signOut(); }}>Logout</button></header>
+  return <div className="shell"><header className="topbar"><div className="logo">AI</div><div><b>AI FILM STUDIO</b><small>Story-to-film prompt production workspace</small></div><span className="free-tag">GEMINI · SUPABASE</span><button className="logout" onClick={async () => { if (supabase) await supabase.auth.signOut(); }}>Logout</button></header>
     <div className="layout"><aside className="sidebar"><div className="side-label">WORKSPACE</div><div className="nav active">▣　Film Project</div><div className="nav">◈　Story & Characters</div><div className="nav">▤　Clip Prompt Planner</div><div className="nav">✓　Continuity Check</div>
       <div className="side-note"><b>Production workflow</b><p>Gemini က ဇာတ်လမ်းကို scene beat များအဖြစ် ခွဲပြီး video-generation prompt တစ်ခုချင်း ထုတ်ပေးသည်။ Video ကိုယ်တိုင် render မလုပ်ပါ။</p></div>
       <div className="side-label saved-label">SAVED PROJECTS</div>{projects.map(item => <button key={item.id} className={"saved " + (project?.id === item.id ? "chosen" : "")} onClick={() => openProject(item)}>{item.title}<small>{Math.round(item.duration_seconds / 60 * 10) / 10} min · {item.genre}</small></button>)}
