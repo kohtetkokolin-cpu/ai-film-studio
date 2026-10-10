@@ -235,7 +235,7 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
         source_line = next((line for line in character_lines if name in line), "")
         parts = re.split(r"\s*[—:：|]\s*", source_line)
         appearance = parts[-1].strip() if len(parts) > 1 else "မျက်နှာ၊ အသားအရောင်၊ ဆံပင်၊ ကိုယ်ခန္ဓာနှင့် မှတ်မိစေသောအမှတ်အသားကို User အတည်ပြုရန်"
-        age_match = re.search(r"(?:အသက်\s*[^၊,။]+|age\s*[:=]?\s*\\d+[^,။]*)", appearance, re.I)
+        age_match = re.search(r"(?:အသက်\s*[^၊,။]+|age\s*[:=]?\s*\d+[^,။]*)", appearance, re.I)
         age = age_match.group(0).strip() if age_match else "User အတည်ပြုရန်"
         characters.append({
             "id": f"CHAR-{i+1:03d}", "name": name,
