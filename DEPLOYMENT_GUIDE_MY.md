@@ -20,9 +20,9 @@ Repo ကို private အဖြစ်ထားနိုင်ပါတယ်။
 1. https://supabase.com ကိုဖွင့်ပြီး account ဝင်ပါ။
 2. New project ကိုနှိပ်ပါ။ Project name/password/region ရွေးပါ။ Database password ကို လုံခြုံတဲ့နေရာမှာ သိမ်းပါ။
 3. Project ပြီးသွားလျှင် SQL Editor ကိုဖွင့်ပါ။
-4. GitHub ထဲက supabase/migrations/202610100001_film_projects.sql ဖိုင်ကို ဖွင့်ပါ။
-5. SQL အားလုံးကို copy လုပ်ပြီး Supabase SQL Editor ထဲ paste လုပ်ပါ၊ Run နှိပ်ပါ။
-6. Table Editor ထဲမှာ film_projects table ပေါ်လာကြောင်း စစ်ပါ။
+4. **အသစ်တည်ဆောက်သော database သာ** `supabase/migrations/202610100001_film_projects.sql` ကို run လုပ်ပါ။ ရှိပြီးသား table ကို ထပ်မဖန်တီးပါနှင့်။
+5. ထို့နောက် `supabase/migrations/202610100002_production_workflow.sql` ကို ဖွင့်ပြီး SQL အားလုံးကို SQL Editor ထဲ paste လုပ်ကာ Run နှိပ်ပါ။ ဒီ migration သည် ရှိပြီးသား project/clip data ကို မဖျက်ဘဲ production workflow columns များ ထည့်ပေးသည်။
+6. Table Editor ထဲမှာ `film_projects` ရှိပြီး `culture`, `generation_mode`, `sound_mode`, `production_package` columns တွေ ပေါ်လာကြောင်း စစ်ပါ။
 
 Table မှာ user_id နဲ့ RLS policies ပါပါတယ်။ Backend က access token ကို verify လုပ်ပြီး database query တိုင်းမှာ user ID ကို စစ်ပါတယ်။
 
