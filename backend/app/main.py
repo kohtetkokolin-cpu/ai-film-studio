@@ -278,8 +278,13 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "ending": "ဇာတ်လမ်းအကျဉ်းမှ အတည်ပြုရန်",
             "assumptions_to_confirm": ["ဇာတ်ကောင်အသက်၊ ရုပ်ရည်၊ ဆက်ဆံရေး", "တိကျသော Dialogue", "Scene တစ်ခုစီ၏ တည်နေရာနှင့် အချိန်"]
         },
-        "expanded_story": story,
-        "characters": characters, "locations": locations, "props": [],
+        "expanded_story": story + "\\n\\nPRODUCTION STORY BEAT OUTLINE (Template Mode)\\n" + "\\n".join(
+            f"{i+1}. {title}: {rule}\\n   Story source to preserve: {story[:260]}"
+            for i, (title, rule) in enumerate(beats)
+        ),
+        "characters": characters, "locations": locations, "props": [
+            {"id": "PROP-001", "name": "ဇာတ်လမ်းအရေးကြီးပစ္စည်း", "description": "ဇာတ်လမ်းထဲက အရေးကြီးပစ္စည်းကို User အတည်ပြုရန်", "continuity": "တည်နေရာ၊ အရောင်နှင့် ကိုင်ထားသည့်လက်ကို Scene အားလုံးတွင် မပြောင်းရန်"}
+        ],
         "scenes": scenes, "quality_report": validate_package({"characters": characters, "locations": locations, "scenes": scenes}, duration)
     }
 
@@ -414,7 +419,9 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
         culture = str(project.get("culture") or "as established in references")
         style = str(project.get("visual_style") or "Realistic cinematic")
         ratio = str(project.get("aspect_ratio") or "16:9")
-        common = f"Approved reference assets: {', '.join(c.get('id','') for c in char_refs)} and {loc.get('id','LOC-?')}. Character references: {char_text}. Location reference: {location_text}. Wardrobe lock: {wardrobe or 'use approved character wardrobe'}. Props: {prop_text or 'only story-required props'}. Culture: {culture}. Visual style: {style}. Aspect ratio {ratio}. Keep faces, ages, hairstyles, body proportions, wardrobe, architecture, object positions and screen direction consistent. No additional characters, no text, no subtitles, no logos or watermark."
+        char_urls = ", ".join(f"{ch.get('id')}: {ch.get('reference_url')}" for ch in char_refs if ch.get("reference_url"))
+        loc_url = loc.get("reference_url") or "manually attach the saved location reference image"
+        common = f"Approved reference assets: {', '.join(ch.get('id','') for ch in char_refs)} and {loc.get('id','LOC-?')}. Character reference URLs if accessible: {char_urls or 'no URL saved; manually attach reference images'}. Location reference URL if accessible: {loc_url}. Character references: {char_text}. Location reference: {location_text}. Wardrobe lock: {wardrobe or 'use approved character wardrobe'}. Props: {prop_text or 'only story-required props'}. Culture: {culture}. Visual style: {style}. Aspect ratio {ratio}. Keep faces, ages, hairstyles, body proportions, wardrobe, architecture, object positions and screen direction consistent. No additional characters, no text, no subtitles, no logos or watermark."
         image_prompt = f"Create a cinematic still for {scene.get('scene_id')}. {common} Action and dramatic purpose: {action}. Shot composition: {shot}, {angle}. Lighting and color: {lighting}. Mood should support {scene.get('dramatic_purpose','the story beat')}. One coherent frame, believable anatomy and physically plausible staging."
         video_prompt = f"Use the saved reference images for {', '.join(c.get('id','') for c in char_refs) or 'the approved characters'} and location {loc.get('id','LOC-?')}. Create one continuous {scene.get('duration_seconds',8)}-second shot. Action over time: {action}. Dialogue in {project.get('language','Burmese')}: {dialogue if dialogue and dialogue.lower() not in {'none','n/a','မရှိ'} else 'No spoken dialogue; use natural environmental sound only.'} Shot: {shot}, {angle}. Camera movement: {movement}. Lighting: {lighting}. Natural facial expressions and body movement, plausible timing, clear speaker/listener behavior, no accidental lip movement for silent characters. {common}"
         out.append({
