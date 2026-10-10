@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm --prefix frontend install && npm --prefix frontend run build",
+  "installCommand": "npm --prefix frontend install",
+  "outputDirectory": "frontend/dist",
+  "framework": null,
+  "functions": {
+    "api/[...path].py": {
+      "maxDuration": 60
+    }
+  }
+}
