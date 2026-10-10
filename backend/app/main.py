@@ -276,7 +276,8 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
     for i in range(count):
         start = i * 8
         clip_duration = min(8, duration - start)
-        beat_title, beat_rule = beats[min(int(i * len(beats) / count), len(beats)-1)]
+        beat_index = round(i * (len(beats)-1) / max(1, count-1))
+        beat_title, beat_rule = beats[beat_index]
         sentence_index = min(len(sentences)-1, int(i * len(sentences) / count))
         source_sentence = sentences[sentence_index]
         involved = [ch for ch in characters if ch["name"] and ch["name"] in source_sentence]
@@ -304,8 +305,10 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "camera_movement": ["slow push-in","gentle tracking move","locked-off reaction shot"][i % 3],
             "lighting": "Motivated cinematic lighting consistent with location, time of day, and the previous scene.",
             "sound": str(project.get("sound_mode") or "dialogue"),
-            "continuity": ["Keep the same approved character faces, age, hair and wardrobe.",
-                "Preserve the location layout, screen direction and prop positions.",
+            "continuity": [f"Carry forward the prior scene result and begin this beat with a motivated action: {beat_title}.",
+                "Keep the same approved character faces, age, hair and wardrobe.",
+                "Preserve the location layout, screen direction and prop positions; no unexplained location or time jump.",
+                "End on a visible result, reaction, clue or decision that motivates the next scene.",
                 "Keep action physically plausible within the clip duration."]
         })
     return {
