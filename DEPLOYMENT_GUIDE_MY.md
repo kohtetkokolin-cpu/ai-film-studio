@@ -49,7 +49,7 @@ Supabase dashboard မှာ Project Settings → API (သို့မဟုတ�
 2. Google account နဲ့ဝင်ပြီး API key ဖန်တီးပါ။
 3. Key ကို private password လို သိမ်းပါ။ GitHub/Chat/Frontend source ထဲ မထည့်ပါနဲ့။
 
-Default model က gemini-3.8-flash ဖြစ်ပါတယ်။ Google ရဲ့ official model documentation မှာ stable/GA model အဖြစ် ဖော်ပြထားပါတယ်။ သို့သော် free quota သေချာပေါက်ရမယ်၊ request ဘယ်နှစ်ခါရမယ်ဆိုတာ အာမခံမရပါ။ Quota က AI Studio project, model availability, region, usage/tier နဲ့ Google ရဲ့ လက်ရှိစည်းမျဉ်းပေါ် မူတည်ပါတယ်။ AI Studio ရဲ့ Rate limits/usage ကို စစ်ပါ။ Model ပြောင်းလိုပါက Backend environment ထဲက GEMINI_MODEL ကို ပြင်နိုင်ပါတယ်။
+Default model က gemini-2.5-flash ဖြစ်ပါတယ်။ Google ရဲ့ official model documentation မှာ stable/GA model အဖြစ် ဖော်ပြထားပါတယ်။ သို့သော် free quota သေချာပေါက်ရမယ်၊ request ဘယ်နှစ်ခါရမယ်ဆိုတာ အာမခံမရပါ။ Quota က AI Studio project, model availability, region, usage/tier နဲ့ Google ရဲ့ လက်ရှိစည်းမျဉ်းပေါ် မူတည်ပါတယ်။ AI Studio ရဲ့ Rate limits/usage ကို စစ်ပါ။ Model ပြောင်းလိုပါက Backend environment ထဲက GEMINI_MODEL ကို ပြင်နိုင်ပါတယ်။
 
 ## 5. Backend Vercel project
 
@@ -63,7 +63,7 @@ Default model က gemini-3.8-flash ဖြစ်ပါတယ်။ Google ရဲ�
 | Name | Value |
 |---|---|
 | GEMINI_API_KEY | သင့် Gemini API key အစစ် |
-| GEMINI_MODEL | gemini-3.8-flash |
+| GEMINI_MODEL | gemini-2.5-flash |
 | SUPABASE_URL | Supabase Project URL |
 | SUPABASE_ANON_KEY | Supabase publishable/anon key |
 | SUPABASE_SERVICE_ROLE_KEY | Supabase service_role/secret key |
@@ -122,3 +122,16 @@ Default model က gemini-3.8-flash ဖြစ်ပါတယ်။ Google ရဲ�
 - API key တွေကို browser console, screenshot, public GitHub repo ထဲ မပေါ်စေပါနဲ့။
 - Key leak ဖြစ်သွားရင် provider dashboard မှာ revoke/rotate လုပ်ပါ။
 - Public users အများကြီးသုံးမယ်ဆိုရင် usage limits, abuse protection, email verification, logs, backup/restore, quota monitoring တို့ကို ထပ်ထည့်ဖို့လိုပါတယ်။
+
+## 10. Production Workflow V2 — Mode နှစ်မျိုးနှင့် အဆင့်လိုက်ထုတ်လုပ်မှု
+
+- GitHub branch `production-workflow-v2` မှ ပြင်ဆင်မှုများကို main သို့ merge လုပ်ပြီး Frontend/Backend Vercel deployments အောင်မြင်ကြောင်း စစ်ပါ။
+- Supabase ရှိပြီးသား project များအတွက် `supabase/migrations/202610100002_production_workflow.sql` ကို SQL Editor မှာ တစ်ကြိမ် run လုပ်ပါ။ Existing projects နဲ့ clips ကို မဖျက်ပါ။
+- `generation_mode=template`: Gemini API မခေါ်ပါ။ Rule-based Story Beat Outline၊ Character/Location reference prompts၊ Scene plan၊ Image/Video prompts နဲ့ QC checks ထုတ်ပေးသည်။ မသိနိုင်သော ဇာတ်လမ်းအချက်အလက်များကို User က အတည်ပြုရန်လိုသည်။
+- `generation_mode=gemini`: Gemini လိုအပ်သည်။ Gemini မရလျှင် error ပြပြီး Template ကို အလိုအလျောက်မပြောင်းပါ။
+- `generation_mode=auto`: Gemini ကို စမ်းသုံးပြီး မအောင်မြင်ပါက Template fallback ကို အသုံးပြုသည်။ Output မှာ `generation_source` နှင့် notice ပြမည်။
+- Workflow: Project Setup → Story Analysis → Character Bible → Location/Prop Bible → Scene Breakdown → Image/Video Prompts.
+- Character ID (ဥပမာ CHAR-001), Location ID (LOC-A), Wardrobe ID နဲ့ Prop ID ကို Scene တစ်ခုချင်းစီမှာ ချိတ်ဆက်ပေးသည်။ ID ကို Prompt ထဲထည့်ထားရုံနဲ့ external video AI က reference image ကို သိမည်မဟုတ်ပါ။ User က saved reference image ကို video/image tool ထဲ ကိုယ်တိုင်တွဲထည့်ရမည်။ URL သိမ်းထားပါက prompt ထဲမှာ reference URL ကို ဖော်ပြပေးသည်။
+- App သည် image/video ကို ကိုယ်တိုင် render မလုပ်သေးပါ။ Prompt ထုတ်ပေးပြီး အပြင်က tool ဖြင့် render လုပ်ရသည်။
+- 1-minute project = 8 scenes (7×8s + final 4s); 3-minute = 23 scenes (22×8s + final 4s). Scene duration စုစုပေါင်းကို QC checker က စစ်သည်။
+- ပြင်ဆင်ပြီးနောက် GitHub Actions တွင် frontend build၊ backend compile နှင့် template production unit tests အောင်မြင်ကြောင်း စစ်ပါ။ Build success သည် live deployment နှင့် Supabase migration အောင်မြင်ပြီးဖြစ်ကြောင်း အစားမထိုးနိုင်ပါ။
