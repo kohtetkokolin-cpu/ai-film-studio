@@ -255,21 +255,50 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "lighting_states": ["day", "dusk", "night"],
             "reference_prompt": f"Create a cinematic environment reference sheet for {name}, location ID {lid}. Show a wide establishing view, reverse angle, and a clear spatial layout. Keep architecture, entrances, windows, furniture, materials and geography consistent. Match the selected culture and visual style; where story details are missing, use a plausible restrained design and flag it for approval. No people, text, logos or watermark."
         })
+    sentences = [part.strip() for part in re.split(r"[။.!?！？\\n]+", story) if part.strip()] or [story]
+    prop_catalog = [
+        ("စာအိတ်", "စာအိတ်", "envelope", "Keep envelope color, shape and hand position consistent."),
+        ("ဖုန်း", "ဖုန်း", "phone", "Keep phone model and hand position consistent."),
+        ("သော့", "သော့", "key", "Keep key appearance and pocket/hand continuity."),
+        ("အိတ်", "အိတ်", "bag", "Keep bag color, strap and carried shoulder consistent."),
+        ("ဓာတ်ပုံ", "ဓာတ်ပုံ", "photograph", "Keep photograph content and orientation consistent."),
+        ("ဓား", "ဓား", "knife", "Keep prop placement safe and physically consistent."),
+        ("ခွက်", "ခွက်", "cup", "Keep cup level, liquid and placement consistent."),
+        ("စာ", "စာ", "letter", "Keep letter/fold and handoff continuity.")
+    ]
+    props = []
+    for keyword, display_name, english_name, rule in prop_catalog:
+        if keyword in story:
+            props.append({"id": f"PROP-{len(props)+1:03d}", "name": display_name,
+                "description": f"Story-detected prop: {english_name}; appearance needs user confirmation.",
+                "continuity": rule, "keyword": keyword})
     scenes = []
     for i in range(count):
         start = i * 8
         clip_duration = min(8, duration - start)
         beat_title, beat_rule = beats[min(int(i * len(beats) / count), len(beats)-1)]
-        char_ids = [c["id"] for c in characters[:2]]
+        sentence_index = min(len(sentences)-1, int(i * len(sentences) / count))
+        source_sentence = sentences[sentence_index]
+        involved = [ch for ch in characters if ch["name"] and ch["name"] in source_sentence]
+        if not involved:
+            involved = characters[:1]
+        char_ids = [ch["id"] for ch in involved]
         loc_id = locations[min(int(i * len(locations) / count), len(locations)-1)]["id"]
+        scene_props = [p for p in props if p.get("keyword") and p["keyword"] in source_sentence]
+        quote_matches = re.findall(r'[“"「](.*?)[”"」]', story)
+        quote = quote_matches[min(len(quote_matches)-1, int(i * len(quote_matches) / count))] if quote_matches else ""
+        dialogue = f"Exact supplied dialogue (speaker must be confirmed): {quote}" if quote and i == min(count-1, max(0, int(count * 0.55))) else (
+            "No exact dialogue supplied for this beat; write/approve dialogue before rendering."
+        )
         scenes.append({
             "scene_id": f"SC-{i+1:03d}", "clip_number": i+1,
             "start_seconds": start, "duration_seconds": clip_duration,
             "beat_title": beat_title, "dramatic_purpose": beat_rule,
             "location_id": loc_id, "character_ids": char_ids,
-            "wardrobe_ids": [characters[j]["wardrobe"][0]["id"] for j in range(min(len(characters),2))],
-            "prop_ids": [], "action": f"{beat_title}: {beat_rule} Use only established story facts from the supplied story: {story[:500]}",
-            "dialogue": "Dialogue ကို ဇာတ်လမ်းအပြည့်နှင့် Character စရိုက်အတည်ပြုပြီးမှ ရေးရန်။",
+            "wardrobe_ids": [ch["wardrobe"][0]["id"] for ch in involved if ch.get("wardrobe")],
+            "prop_ids": [p["id"] for p in scene_props],
+            "action": f"Story fact for this beat: {source_sentence}. Production direction: {beat_rule} Show a concrete, visible action that preserves this fact; do not invent an unsupported plot event.",
+            "dialogue": dialogue,
             "shot_size": ["wide establishing shot","medium shot","close-up reaction","over-the-shoulder"][i % 4],
             "camera_angle": ["eye-level","slightly low angle","three-quarter angle"][i % 3],
             "camera_movement": ["slow push-in","gentle tracking move","locked-off reaction shot"][i % 3],
@@ -292,12 +321,10 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "assumptions_to_confirm": ["ဇာတ်ကောင်အသက်၊ ရုပ်ရည်၊ ဆက်ဆံရေး", "တိကျသော Dialogue", "Scene တစ်ခုစီ၏ တည်နေရာနှင့် အချိန်"]
         },
         "expanded_story": story + "\n\nPRODUCTION STORY BEAT OUTLINE (Template Mode)\n" + "\n".join(
-            f"{i+1}. {title}: {rule}\n   Story source to preserve: {story[:260]}"
+            f"{i+1}. {title}: {rule}\n   Source fact: {sentences[min(len(sentences)-1, int(i * len(sentences) / len(beats)))]}"
             for i, (title, rule) in enumerate(beats)
         ),
-        "characters": characters, "locations": locations, "props": [
-            {"id": "PROP-001", "name": "ဇာတ်လမ်းအရေးကြီးပစ္စည်း", "description": "ဇာတ်လမ်းထဲက အရေးကြီးပစ္စည်းကို User အတည်ပြုရန်", "continuity": "တည်နေရာ၊ အရောင်နှင့် ကိုင်ထားသည့်လက်ကို Scene အားလုံးတွင် မပြောင်းရန်"}
-        ],
+        "characters": characters, "locations": locations, "props": [{k: v for k, v in prop.items() if k != "keyword"} for prop in props],
         "scenes": scenes, "quality_report": validate_package({"characters": characters, "locations": locations, "scenes": scenes}, duration)
     }
 
