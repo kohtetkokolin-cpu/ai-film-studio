@@ -255,7 +255,7 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "lighting_states": ["day", "dusk", "night"],
             "reference_prompt": f"Create a cinematic environment reference sheet for {name}, location ID {lid}. Show a wide establishing view, reverse angle, and a clear spatial layout. Keep architecture, entrances, windows, furniture, materials and geography consistent. Match the selected culture and visual style; where story details are missing, use a plausible restrained design and flag it for approval. No people, text, logos or watermark."
         })
-    sentences = [part.strip() for part in re.split(r"[။.!?！？\\n]+", story) if part.strip()] or [story]
+    sentences = [part.strip() for part in re.split(r"[။.!?！？\n]+", story) if part.strip()] or [story]
     prop_catalog = [
         ("စာအိတ်", "စာအိတ်", "envelope", "Keep envelope color, shape and hand position consistent."),
         ("ဖုန်း", "ဖုန်း", "phone", "Keep phone model and hand position consistent."),
