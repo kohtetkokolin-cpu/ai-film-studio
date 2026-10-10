@@ -151,12 +151,15 @@ def parse_json_response(text: str) -> dict[str, Any]:
 def _character_names(project: dict[str, Any]) -> list[str]:
     text = str(project.get("character_bible") or "")
     names: list[str] = []
-    # Treat each non-empty line as a reference entry; don't pretend to infer identities perfectly.
     for line in text.splitlines():
         line = re.sub(r"^[\s•*\-\d.)]+", "", line).strip()
         if not line:
             continue
-        name = re.split(r"\s*[—:：|]\s*", line, maxsplit=1)[0].strip()
+        parts = re.split(r"\s*[—:：|]\s*", line)
+        if re.match(r"^CHAR-[A-Z0-9]+$", parts[0], re.I) and len(parts) > 1:
+            name = parts[1].strip()
+        else:
+            name = parts[0].strip()
         if name and name not in names:
             names.append(name[:80])
     if not names:
@@ -171,7 +174,11 @@ def _location_names(project: dict[str, Any]) -> list[str]:
         line = re.sub(r"^[\s•*\-\d.)]+", "", line).strip()
         if not line:
             continue
-        name = re.split(r"\s*[—:：|]\s*", line, maxsplit=1)[0].strip()
+        parts = re.split(r"\s*[—:：|]\s*", line)
+        if re.match(r"^LOC-[A-Z0-9]+$", parts[0], re.I) and len(parts) > 1:
+            name = parts[1].strip()
+        else:
+            name = parts[0].strip()
         if name and name not in names:
             names.append(name[:100])
     if not names:
@@ -223,11 +230,17 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
     beats = _story_beats(genre)
     story = str(project.get("story_idea") or "").strip()
     characters = []
+    character_lines = [line.strip() for line in str(project.get("character_bible") or "").splitlines() if line.strip()]
     for i, name in enumerate(names):
+        source_line = next((line for line in character_lines if name in line), "")
+        parts = re.split(r"\\s*[—:：|]\\s*", source_line)
+        appearance = parts[-1].strip() if len(parts) > 1 else "မျက်နှာ၊ အသားအရောင်၊ ဆံပင်၊ ကိုယ်ခန္ဓာနှင့် မှတ်မိစေသောအမှတ်အသားကို User အတည်ပြုရန်"
+        age_match = re.search(r"(?:အသက်\\s*[^၊,။]+|age\\s*[:=]?\\s*\\d+[^,။]*)", appearance, re.I)
+        age = age_match.group(0).strip() if age_match else "User အတည်ပြုရန်"
         characters.append({
             "id": f"CHAR-{i+1:03d}", "name": name,
             "role": "ဇာတ်ကောင်အခန်းကဏ္ဍကို Story/Character Bible အတည်ပြုချိန်တွင် ဖြည့်ရန်",
-            "age": "User အတည်ပြုရန်", "appearance": "မျက်နှာ၊ အသားအရောင်၊ ဆံပင်၊ ကိုယ်ခန္ဓာနှင့် မှတ်မိစေသောအမှတ်အသားကို သတ်မှတ်ရန်",
+            "age": age, "appearance": appearance,
             "wardrobe": [{"id": f"WARD-{i+1:03d}-01", "description": "ဇာတ်လမ်းနှင့် ယဉ်ကျေးမှုကိုက်ညီသော ဝတ်စုံကို အတည်ပြုရန်"}],
             "expressions": ["neutral", "happy", "angry", "sad", "afraid", "surprised"],
             "movement": "Natural, physically plausible movement; preserve identity and body proportions.",
