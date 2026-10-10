@@ -49,7 +49,7 @@ Supabase dashboard မှာ Project Settings → API (သို့မဟုတ�
 2. Google account နဲ့ဝင်ပြီး API key ဖန်တီးပါ။
 3. Key ကို private password လို သိမ်းပါ။ GitHub/Chat/Frontend source ထဲ မထည့်ပါနဲ့။
 
-Default model က gemini-2.5-flash ဖြစ်ပါတယ်။ Google ရဲ့ official model documentation မှာ stable/GA model အဖြစ် ဖော်ပြထားပါတယ်။ သို့သော် free quota သေချာပေါက်ရမယ်၊ request ဘယ်နှစ်ခါရမယ်ဆိုတာ အာမခံမရပါ။ Quota က AI Studio project, model availability, region, usage/tier နဲ့ Google ရဲ့ လက်ရှိစည်းမျဉ်းပေါ် မူတည်ပါတယ်။ AI Studio ရဲ့ Rate limits/usage ကို စစ်ပါ။ Model ပြောင်းလိုပါက Backend environment ထဲက GEMINI_MODEL ကို ပြင်နိုင်ပါတယ်။
+Default model က gemini-3.8-flash ဖြစ်ပါတယ်။ Google ရဲ့ official model documentation မှာ stable/GA model အဖြစ် ဖော်ပြထားပါတယ်။ သို့သော် free quota သေချာပေါက်ရမယ်၊ request ဘယ်နှစ်ခါရမယ်ဆိုတာ အာမခံမရပါ။ Quota က AI Studio project, model availability, region, usage/tier နဲ့ Google ရဲ့ လက်ရှိစည်းမျဉ်းပေါ် မူတည်ပါတယ်။ AI Studio ရဲ့ Rate limits/usage ကို စစ်ပါ။ Model ပြောင်းလိုပါက Backend environment ထဲက GEMINI_MODEL ကို ပြင်နိုင်ပါတယ်။
 
 ## 5. Backend Vercel project
 
@@ -63,7 +63,7 @@ Default model က gemini-2.5-flash ဖြစ်ပါတယ်။ Google ရဲ�
 | Name | Value |
 |---|---|
 | GEMINI_API_KEY | သင့် Gemini API key အစစ် |
-| GEMINI_MODEL | gemini-2.5-flash |
+| GEMINI_MODEL | gemini-3.8-flash |
 | SUPABASE_URL | Supabase Project URL |
 | SUPABASE_ANON_KEY | Supabase publishable/anon key |
 | SUPABASE_SERVICE_ROLE_KEY | Supabase service_role/secret key |
