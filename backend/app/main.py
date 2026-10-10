@@ -566,7 +566,8 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
         movement = str(scene.get("camera_movement") or "subtle controlled camera movement")
         lighting = str(scene.get("lighting") or "motivated cinematic lighting")
         culture = str(project.get("culture") or "as established in references")
-        style = str(project.get("visual_style") or "Realistic cinematic")\n        style_direction = _style_direction(style)
+        style = str(project.get("visual_style") or "Realistic cinematic")
+        style_direction = _style_direction(style)
         ratio = str(project.get("aspect_ratio") or "16:9")
         char_urls = ", ".join(f"{ch.get('id')}: {ch.get('reference_url')}" for ch in char_refs if ch.get("reference_url"))
         loc_url = loc.get("reference_url") or "manually attach the saved location reference image"
