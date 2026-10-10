@@ -3,7 +3,6 @@ import math
 import os
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import quote
 
 import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -78,12 +77,16 @@ def current_user(authorization: str | None = Header(default=None)) -> dict[str, 
 
 
 def db_headers(prefer: str = "return=representation") -> dict[str, str]:
-    return {
+    # New Supabase secret keys (sb_secret_...) are API keys, not JWTs.
+    # Legacy service_role keys are JWTs and can also be sent as Authorization.
+    headers = {
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "Content-Type": "application/json",
         "Prefer": prefer,
     }
+    if not SUPABASE_SERVICE_ROLE_KEY.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+    return headers
 
 
 def db_request(method: str, table_path: str, *, params: dict | None = None, payload: Any = None) -> Any:
