@@ -1,36 +1,59 @@
 # AI Film Studio
 
-သီးခြား AI Film Production Assistant — movie recap project မဟုတ်ပါ။ ဒီ MVP က ဇာတ်လမ်းအချက်အလက်ကို အခြေခံပြီး 8-second clip prompts နဲ့ negative prompts ထုတ်ပေးတဲ့ workspace ဖြစ်ပါတယ်။
+မြန်မာဘာသာအခြေပြု AI film pre-production workspace။ ဇာတ်လမ်းအကျဉ်းကို Gemini နဲ့ အဓိပ္ပါယ်နားလည်စေပြီး story beats, cinematic video prompts, negative prompts နဲ့ continuity checklist များ ထုတ်ပေးသည်။ ဒီ app က ဗီဒီယိုကို တိုက်ရိုက် render မလုပ်ပါ — external video generator မှာ အသုံးပြုရန် prompt များထုတ်ပေးခြင်းဖြစ်သည်။
 
-## ပါဝင်သောအရာများ
-- Burmese-first project setup
-- FastAPI backend + SQLite database
-- Project သိမ်းဆည်းခြင်းနှင့် ပြန်ဖွင့်ခြင်း
-- 8-second clip prompt generator
-- Character / location / continuity notes
-- Clip တစ်ခုချင်းစီအတွက် visual prompt နှင့် negative prompt
+## Architecture
+
+- Frontend: React + Vite, Supabase Auth
+- Backend: FastAPI + Google GenAI SDK
+- Persistence: Supabase Postgres REST API; projects isolated by user ID
+- Authentication: Supabase Auth access-token verification on backend
+- AI model default: gemini-3.8-flash (override with server-side GEMINI_MODEL)
+
+## Main features
+
+- Burmese-first project form with story, genre, duration, style, ratio, language/culture, character/location bibles, continuity notes
+- Gemini-generated cinematic story beats and ready-to-paste detailed prompts
+- Exactly ceil(duration_seconds / 8) clips; duration choices are 1–5 minutes, last clip shortened if needed
+- Negative prompts and continuity checklist per clip
+- Supabase-backed saved projects; users can only access their own projects
 - TXT / JSON export
-- Paid AI API မလိုအပ်ပါ
 
-## Run လုပ်နည်း
-လိုအပ်ချက်: Python 3.11+, Node.js 20+
+## Deployment
 
-Backend:
+Follow DEPLOYMENT_GUIDE_MY.md. Deploy two Vercel projects from the same repo:
+1. Backend project Root Directory: backend
+2. Frontend project Root Directory: frontend
+
+Run supabase/migrations/202610100001_film_projects.sql in Supabase SQL Editor before using the app.
+
+## Local development
+
+Backend terminal:
     cd backend
     python -m venv .venv
+    # Windows: .venv\Scripts\activate
+    # macOS/Linux: source .venv/bin/activate
     pip install -r requirements.txt
+
+Set environment variables from the root .env.example in your shell (do not commit secrets), then run:
     uvicorn app.main:app --reload --port 8000
 
-Frontend terminal အသစ်:
+Frontend terminal:
     cd frontend
     npm install
+
+Create frontend/.env.local with:
+    VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+    VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
+    VITE_API_BASE_URL=http://127.0.0.1:8000
+
+Then run:
     npm run dev
 
-Vite က ပြသတဲ့ local URL ကို ဖွင့်ပါ (ပုံမှန်အားဖြင့် http://localhost:5173)။
-API docs: http://127.0.0.1:8000/docs
+## Security notes
 
-## Clip timing
-Clip တစ်ခုကို 8 seconds target ထားပါတယ်။ စုစုပေါင်းကြာချိန်က 8 နဲ့ အတိအကျမစားရင် နောက်ဆုံး clip ကို လိုအပ်သလိုတိုစေပါတယ်။ 60 seconds = 7×8 + 4 seconds; 180 seconds = 22×8 + 4 seconds.
-
-## သတိပြုရန်
-ဒီ version က prompt builder ဖြစ်ပြီး AI model ကို ချိတ်မထားသေးပါ။ ဇာတ်လမ်းစာသားကို အခြေခံပြီး prompt ကို စနစ်တကျ ဖွဲ့စည်းပေးသော်လည်း screenplay ကို အဓိပ္ပါယ်နားလည်ပြီး အလိုအလျောက် ဇာတ်လမ်းပြန်ရေးတဲ့ LLM မဟုတ်သေးပါ။ Public deployment မလုပ်မီ authentication, backups, HTTPS, database persistence, rate limiting တို့ ထည့်ရန်လိုပါတယ်။ Paid API keys များကို frontend ထဲ မထည့်ပါနှင့်။
+- Never put Gemini API keys or Supabase service-role keys in VITE_* variables.
+- Backend verifies Supabase access tokens and adds the authenticated user's ID to all project queries.
+- Database schema enables RLS and includes per-user policies.
+- Gemini free-tier quota and access depend on the account/project/model; no fixed request allowance is guaranteed.
