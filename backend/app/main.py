@@ -255,7 +255,7 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "beat_title": beat_title, "dramatic_purpose": beat_rule,
             "location_id": loc_id, "character_ids": char_ids,
             "wardrobe_ids": [characters[j]["wardrobe"][0]["id"] for j in range(min(len(characters),2))],
-            "prop_ids": [], "action": f"Advance the supplied story: {story[:500]}",
+            "prop_ids": [], "action": f"{beat_title}: {beat_rule} Use only established story facts from the supplied story: {story[:500]}",
             "dialogue": "Dialogue ကို ဇာတ်လမ်းအပြည့်နှင့် Character စရိုက်အတည်ပြုပြီးမှ ရေးရန်။",
             "shot_size": ["wide establishing shot","medium shot","close-up reaction","over-the-shoulder"][i % 4],
             "camera_angle": ["eye-level","slightly low angle","three-quarter angle"][i % 3],
