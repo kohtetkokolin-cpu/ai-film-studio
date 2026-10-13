@@ -223,6 +223,21 @@ def _story_beats(genre: str) -> list[tuple[str, str]]:
     ]
 
 
+def _expand_template_novel(story, beats, sentences, genre):
+    """Template-mode novel expansion: weave story sentences into a full prose
+    arc (beginning -> escalation -> turning point -> consequence -> ending).
+    Rule-based: structures the supplied story idea, never invents new plot."""
+    facts = sentences or ([story.strip()] if story.strip() else ["-"])
+    n = max(len(beats), 1)
+    arc_labels = ["အစ", "အရှိန်မြှင့်ခြင်း", "အလှည့်အပြောင်း", "အကျိုးဆက်", "အဆုံး"]
+    parts = []
+    for i, (title, rule) in enumerate(beats):
+        arc = arc_labels[min(len(arc_labels) - 1, int(i * len(arc_labels) / n))]
+        fact = facts[min(len(facts) - 1, int(i * len(facts) / n))]
+        parts.append("[" + arc + " | " + title + "]\n" + fact + " " + rule)
+    header = "Novel (" + genre + ", Template Mode)\nOriginal: " + (story.strip() or "-") + "\n\n"
+    return header + "\n\n".join(parts)
+
 def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
     duration = int(project["duration_seconds"])
     count = math.ceil(duration / 8)
@@ -325,10 +340,7 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
             "ending": "ဇာတ်လမ်းအကျဉ်းမှ အတည်ပြုရန်",
             "assumptions_to_confirm": ["ဇာတ်ကောင်အသက်၊ ရုပ်ရည်၊ ဆက်ဆံရေး", "တိကျသော Dialogue", "Scene တစ်ခုစီ၏ တည်နေရာနှင့် အချိန်"]
         },
-        "expanded_story": story + "\n\nPRODUCTION STORY BEAT OUTLINE (Template Mode)\n" + "\n".join(
-            f"{i+1}. {title}: {rule}\n   Source fact: {sentences[min(len(sentences)-1, int(i * len(sentences) / len(beats)))]}"
-            for i, (title, rule) in enumerate(beats)
-        ),
+        "expanded_story": _expand_template_novel(story, beats, sentences, genre),
         "characters": characters, "locations": locations, "props": [{k: v for k, v in prop.items() if k != "keyword"} for prop in props],
         "scenes": scenes, "quality_report": validate_package({"characters": characters, "locations": locations, "scenes": scenes}, duration)
     }
@@ -527,7 +539,7 @@ Do not claim media has been rendered. Character and location reference prompts a
 Return exactly this structure:
 {{
 "story_analysis":{{"logline":"...","theme":"...","protagonist_goal":"...","central_conflict":"...","stakes":"...","turning_point":"...","ending":"...","assumptions_to_confirm":[]}},
-"expanded_story":"complete coherent short-film story",
+"expanded_story":"full prose short story in the target language, novel-style with vivid sensory paragraphs, character inner life, complete beginning-escalation-turning point-consequence-ending arc",
 "characters":[{{"id":"CHAR-001","name":"...","role":"...","age":"...","appearance":"...","wardrobe":[{{"id":"WARD-001-01","description":"..."}}],"expressions":[],"movement":"...","voice":"...","reference_prompt":"detailed English character-sheet prompt, front/side/back and expressions"}}],
 "locations":[{{"id":"LOC-A","name":"...","environment_lock":"...","lighting_states":[],"reference_prompt":"detailed English location reference sheet prompt with wide/reverse/layout views"}}],
 "props":[{{"id":"PROP-001","name":"...","description":"...","continuity":"..."}}],
@@ -599,6 +611,29 @@ def generate_production_package(project: dict[str, Any]) -> dict[str, Any]:
         return package
 
 
+def _compact_prompt(text, limit=800):
+    """Condense a prompt to <= limit chars, preferring sentence boundaries."""
+    raw = re.sub(r"\s+", " ", text or "").strip()
+    if len(raw) <= limit:
+        return raw
+    compact = re.sub(r"\b(ultra-detailed|extremely|highly|beautifully|stunning|masterpiece)\b", "", raw, flags=re.I)
+    compact = re.sub(r"\s*,\s*", ", ", compact)
+    compact = re.sub(r"\s+", " ", compact).strip()
+    if len(compact) <= limit:
+        return compact
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|\s*;\s*", compact) if p.strip()]
+    def _score(p):
+        return 3 if re.search(r"character|appearance|location|action|dialogue|camera|shot|lighting|continuity", p, re.I) else 0
+    ranked = sorted(enumerate(parts), key=lambda x: (-_score(x[1]), x[0]))
+    chosen_idx = set()
+    used = 0
+    for idx, p in ranked:
+        extra = len(p) + (1 if chosen_idx else 0)
+        if used + extra <= limit:
+            chosen_idx.add(idx)
+            used += extra
+    return " ".join(parts[i] for i in range(len(parts)) if i in chosen_idx)
+
 def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> list[dict[str, Any]]:
     chars = {c.get("id"): c for c in package.get("characters", [])}
     locs = {x.get("id"): x for x in package.get("locations", [])}
@@ -627,6 +662,11 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
         common = f"Approved reference assets: {', '.join(ch.get('id','') for ch in char_refs)} and {loc.get('id','LOC-?')}. Character reference URLs if accessible: {char_urls or 'no URL saved; manually attach reference images'}. Location reference URL if accessible: {loc_url}. Character references: {char_text}. Location reference: {location_text}. Wardrobe lock: {wardrobe or 'use approved character wardrobe'}. Props: {prop_text or 'only story-required props'}. Culture: {culture}. Visual style: {style}. Style execution: {style_direction}. Apply the selected medium consistently to faces, materials, edges/linework, shading/rendering, lighting, motion, background design and color grade. Do not switch to another visual medium. Aspect ratio {ratio}. Keep faces, ages, hairstyles, body proportions, wardrobe, architecture, object positions and screen direction consistent. No additional characters, no text, no subtitles, no logos or watermark."
         image_prompt = f"Create a cinematic still for {scene.get('scene_id')}. {common} Dramatic purpose: {scene.get('dramatic_purpose', '')}. Action and dramatic purpose: {action}. Continuity constraints: {continuity_text}. Shot composition: {shot}, {angle}. Lighting and color: {lighting}. Mood should support {scene.get('dramatic_purpose','the story beat')}. One coherent frame, believable anatomy and physically plausible staging."
         video_prompt = f"Use the saved reference images for {', '.join(c.get('id','') for c in char_refs) or 'the approved characters'} and location {loc.get('id','LOC-?')}. Create one continuous {scene.get('duration_seconds',8)}-second shot. Story beat purpose: {scene.get('dramatic_purpose', '')}. Action over time: {action}. Continuity with prior and next scene: {continuity_text}. Keep one continuous action with clear start and end; do not add unsupported story events. Dialogue in {project.get('language','Burmese')}: {dialogue if dialogue and dialogue.lower() not in {'none','n/a','မရှိ'} else 'No spoken dialogue; use natural environmental sound only.'} Shot: {shot}, {angle}. Camera movement: {movement}. Lighting: {lighting}. Natural facial expressions and body movement, plausible timing, clear speaker/listener behavior, no accidental lip movement for silent characters. {common}"
+        flow_prompt = video_prompt
+        youtube_prompt = _compact_prompt(
+            str(scene.get("beat_title") or "") + ". " + action + " Shot: " + shot + ", " + angle
+            + ", " + movement + ". " + lighting + ". Characters: " + char_text
+            + ". Location: " + location_text, 800)
         out.append({
             "clip_number": i+1, "scene_id": scene.get("scene_id", f"SC-{i+1:03d}"),
             "start_seconds": int(scene.get("start_seconds", i*8)),
@@ -635,7 +675,7 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
             "dramatic_purpose": str(scene.get("dramatic_purpose") or ""),
             "character_ids": scene.get("character_ids", []), "location_id": scene.get("location_id"),
             "dialogue": dialogue, "action": action, "image_prompt": image_prompt,
-            "visual_prompt": video_prompt, "negative_prompt": NEGATIVE,
+            "visual_prompt": video_prompt, "flow_prompt": flow_prompt, "youtube_prompt": youtube_prompt, "negative_prompt": NEGATIVE,
             "continuity_checklist": [str(x) for x in (scene.get("continuity") or [])][:8] + [
                 f"Use approved character reference(s): {', '.join(c.get('id','') for c in char_refs) or 'confirm character references'}.",
                 f"Use approved location reference: {loc.get('id','LOC-?')}.",
@@ -644,6 +684,42 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
         })
     return out
 
+
+def format_screenplay(project, package):
+    """Render approved scenes as a readable screenplay: headings, action,
+    character cues and dialogue. Derived from the package; no new plot."""
+    title = str(project.get("title") or "UNTITLED")
+    language = str(project.get("language") or "Burmese")
+    locs = {x.get("id"): x for x in package.get("locations", [])}
+    lines = [title.upper(), "Language: " + language, ""]
+    novel = str(package.get("expanded_story") or "").strip()
+    if novel:
+        lines += ["STORY", novel, ""]
+    lines.append("SCREENPLAY")
+    for scene in package.get("scenes", []):
+        loc = locs.get(scene.get("location_id") or "", {})
+        loc_name = str(loc.get("name") or scene.get("location_id") or "UNKNOWN")
+        scene_id = str(scene.get("scene_id") or "")
+        beat = str(scene.get("beat_title") or "")
+        lines += ["", scene_id + " - " + beat, "Location: " + loc_name]
+        action = str(scene.get("action") or "").strip()
+        if action:
+            lines += ["", "Action: " + action]
+        shot = ", ".join(str(x) for x in [scene.get("shot_size"), scene.get("camera_angle")] if x)
+        if shot:
+            lines.append("Camera: " + shot)
+        dialogue = str(scene.get("dialogue") or "").strip()
+        if dialogue and dialogue.lower() not in {"none", "n/a"}:
+            for dline in dialogue.splitlines():
+                dline = dline.strip()
+                if not dline:
+                    continue
+                m = re.match(r"^([^:]{1,40}):\s*(.+)$", dline)
+                if m:
+                    lines += ["", m.group(1).strip().upper(), m.group(2).strip()]
+                else:
+                    lines += ["", "Dialogue: " + dline]
+    return "\n".join(lines).strip() + "\n"
 
 @app.get("/health")
 def health():
@@ -732,7 +808,7 @@ def update_production(pid: str, payload: dict[str, Any], user: dict = Depends(cu
     project = get_owned_project(pid, user)
     package = project.get("production_package") or {}
     # Allow editing the approved package, but never accept arbitrary unrelated top-level keys.
-    for key in ("story_analysis", "expanded_story", "characters", "locations", "props", "scenes"):
+    for key in ("story_analysis", "expanded_story", "characters", "locations", "props", "scenes", "clip_status", "credit_budget"):
         if key in payload:
             package[key] = payload[key]
     package["quality_report"] = validate_package(package, int(project["duration_seconds"]))
@@ -778,6 +854,59 @@ def list_clips(pid: str, user: dict = Depends(current_user)):
     return project.get("clips") or []
 
 
+FLOW_CREDIT_COST = {"lite": 10, "fast": 20, "quality": 100}
+
+
+@app.patch("/api/projects/{pid}/clips/status")
+def update_clip_status(pid: str, payload: dict, user: dict = Depends(current_user)):
+    """Track per-clip generation status for the free-tier workflow."""
+    project = get_owned_project(pid, user)
+    package = project.get("production_package") or {}
+    scene_id = str(payload.get("scene_id") or "").strip()
+    status = str(payload.get("status") or "pending").strip().lower()
+    if status not in {"pending", "flow_done", "youtube_done", "failed"}:
+        raise HTTPException(400, "status must be pending|flow_done|youtube_done|failed")
+    if not scene_id:
+        raise HTTPException(400, "scene_id required")
+    clip_status = package.get("clip_status") or {}
+    clip_status[scene_id] = {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    package["clip_status"] = clip_status
+    persist_package(pid, user, package)
+    return {"project_id": pid, "scene_id": scene_id, "clip_status": clip_status[scene_id]}
+
+
+@app.get("/api/projects/{pid}/tracker")
+def get_tracker(pid: str, user: dict = Depends(current_user)):
+    """Generation tracker with free-tier Flow credit budget math."""
+    project = get_owned_project(pid, user)
+    package = project.get("production_package") or {}
+    clips = project.get("clips") or []
+    budget = package.get("credit_budget") or {}
+    model = str(budget.get("model") or "lite").lower()
+    if model not in FLOW_CREDIT_COST:
+        model = "lite"
+    daily = int(budget.get("daily_credits") or 50)
+    cost = FLOW_CREDIT_COST[model]
+    clip_status = package.get("clip_status") or {}
+    flow_done = sum(1 for c in clips if (clip_status.get(c.get("scene_id")) or {}).get("status") == "flow_done")
+    youtube_done = sum(1 for c in clips if (clip_status.get(c.get("scene_id")) or {}).get("status") == "youtube_done")
+    used = flow_done * cost
+    return {"project_id": pid, "total_clips": len(clips),
+            "flow_done": flow_done, "youtube_done": youtube_done,
+            "pending": len(clips) - flow_done - youtube_done,
+            "credit_budget": {"model": model, "cost_per_clip": cost, "daily_credits": daily,
+                              "used_credits": used, "remaining_credits": max(0, daily - used)},
+            "clip_status": clip_status}
+
+@app.get("/api/projects/{pid}/screenplay")
+def get_screenplay(pid: str, user: dict = Depends(current_user)):
+    project = get_owned_project(pid, user)
+    package = project.get("production_package") or {}
+    if not package.get("scenes"):
+        raise HTTPException(404, "Screenplay not ready. Run Analyze first.")
+    return PlainTextResponse(format_screenplay(project, package),
+        headers={"Content-Disposition": 'attachment; filename="screenplay-' + pid + '.txt"'})
+
 @app.get("/api/projects/{pid}/export")
 def export(pid: str, format: str = Query(default="json", pattern="^(json|txt)$"), user: dict = Depends(current_user)):
     project = get_owned_project(pid, user)
@@ -800,8 +929,9 @@ def export(pid: str, format: str = Query(default="json", pattern="^(json|txt)$")
         lines += [f"### {clip.get('scene_id')} | {clip.get('start_seconds')}s | {clip.get('duration_seconds')}s",
             str(clip.get("beat_title","")), "CHARACTER IDS: " + ", ".join(clip.get("character_ids", [])),
             "LOCATION ID: " + str(clip.get("location_id","")), "DIALOGUE:", str(clip.get("dialogue","")),
-            "", "IMAGE PROMPT:", str(clip.get("image_prompt","")), "", "VIDEO PROMPT:", str(clip.get("visual_prompt","")),
+            "", "IMAGE PROMPT:", str(clip.get("image_prompt","")), "", "VIDEO PROMPT:", str(clip.get("visual_prompt","")), "", "FLOW PROMPT (Google Flow):", str(clip.get("flow_prompt") or clip.get("visual_prompt","")), "", "YOUTUBE CREATE PROMPT (<=800):", str(clip.get("youtube_prompt") or ""),
             "", "NEGATIVE PROMPT:", str(clip.get("negative_prompt","")), "", "CONTINUITY CHECKLIST:",
             *[f"- {x}" for x in clip.get("continuity_checklist", [])], ""]
+    lines += ["", "## SCREENPLAY", format_screenplay(project, package)]
     return PlainTextResponse("\n".join(lines),
         headers={"Content-Disposition": f'attachment; filename="film-project-{pid}.txt"'})
