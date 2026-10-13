@@ -130,9 +130,11 @@ def get_owned_project(pid: str, user: dict[str, Any]) -> dict[str, Any]:
 
 
 def persist_package(pid: str, user: dict[str, Any], package: dict[str, Any]) -> None:
-    db_request("PATCH", "film_projects",
+    rows = db_request("PATCH", "film_projects",
         params={"id": f"eq.{pid}", "user_id": user_filter(user)},
         payload={"production_package": package, "updated_at": datetime.now(timezone.utc).isoformat()})
+    if not rows:
+        raise HTTPException(502, "Production Package ကို database ထဲ သိမ်းမရပါ။ ပြန်ကြိုးစားပြီး Project ကို စစ်ပါ။")
 
 
 def parse_json_response(text: str) -> dict[str, Any]:
@@ -333,28 +335,75 @@ def generate_template_package(project: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_package(package: dict[str, Any], duration: int) -> dict[str, Any]:
+    """Deterministic structural QC; human review is still required for story quality."""
     scenes = package.get("scenes") or []
-    characters = {x.get("id") for x in package.get("characters") or []}
-    locations = {x.get("id") for x in package.get("locations") or []}
-    issues = []
+    character_rows = package.get("characters") or []
+    location_rows = package.get("locations") or []
+    character_ids = [str(x.get("id") or "") for x in character_rows]
+    location_ids = [str(x.get("id") or "") for x in location_rows]
+    characters, locations = set(character_ids), set(location_ids)
+    issues: list[str] = []
+    warnings: list[str] = []
     expected = math.ceil(duration / 8)
     if len(scenes) != expected:
         issues.append(f"Scene count {len(scenes)} များသည်; {expected} ခု လိုအပ်သည်။")
+    if not character_rows:
+        warnings.append("Character Bible မရှိပါ။ Character continuity ကို စစ်ဆေးရန် ခက်ခဲနိုင်သည်။")
+    if not location_rows:
+        issues.append("Location Bible အနည်းဆုံးတစ်ခု လိုအပ်သည်။")
+    if len(character_ids) != len(characters):
+        issues.append("Character ID ထပ်နေသည်။ ID တစ်ခုစီ မတူညီရပါ။")
+    if len(location_ids) != len(locations):
+        issues.append("Location ID ထပ်နေသည်။ ID တစ်ခုစီ မတူညီရပါ။")
     total = 0
+    expected_start = 0
     for i, scene in enumerate(scenes):
-        total += int(scene.get("duration_seconds") or 0)
+        sid = str(scene.get("scene_id") or f"Scene {i+1}")
+        try:
+            seconds = int(scene.get("duration_seconds") or 0)
+            start = int(scene.get("start_seconds") or 0)
+        except (TypeError, ValueError):
+            issues.append(f"{sid}: timing ကိန်းဂဏန်းမမှန်ပါ။")
+            continue
+        if seconds < 1:
+            issues.append(f"{sid}: duration သည် 1 second အနည်းဆုံးရှိရမည်။")
+        if seconds > 8:
+            issues.append(f"{sid}: 8 seconds ထက်ရှည်နေသည်။")
+        if start != expected_start:
+            issues.append(f"{sid}: timeline မဆက်စပ်ပါ။ {expected_start}s မှ စရမည်။")
+        expected_start += seconds
+        total += seconds
         if scene.get("location_id") not in locations:
-            issues.append(f"{scene.get('scene_id','Scene')} တွင် Location ID မရှိ/မမှန်ပါ။")
-        for cid in scene.get("character_ids") or []:
+            issues.append(f"{sid}: Location ID မရှိ/မမှန်ပါ။")
+        ids = scene.get("character_ids") or []
+        if not ids:
+            warnings.append(f"{sid}: Character ID မသတ်မှတ်ထားပါ။")
+        for cid in ids:
             if cid not in characters:
-                issues.append(f"{scene.get('scene_id','Scene')} တွင် {cid} ကို Character Bible မှ မတွေ့ပါ။")
-        if int(scene.get("duration_seconds") or 0) > 8:
-            issues.append(f"{scene.get('scene_id','Scene')} သည် 8 seconds ထက်ရှည်နေသည်။")
-        if int(scene.get("start_seconds") or 0) != sum(int(x.get("duration_seconds") or 0) for x in scenes[:i]):
-            issues.append(f"{scene.get('scene_id','Scene')} ရဲ့ timeline မဆက်စပ်ပါ။")
+                issues.append(f"{sid}: {cid} ကို Character Bible မှ မတွေ့ပါ။")
+        for field, label in (("action", "မြင်သာသော Action"), ("dramatic_purpose", "ဇာတ်လမ်းရည်ရွယ်ချက်")):
+            if not str(scene.get(field) or "").strip():
+                warnings.append(f"{sid}: {label} မဖြည့်ရသေးပါ။")
+        if len(scene.get("continuity") or []) < 2:
+            warnings.append(f"{sid}: အရင်/နောက် Scene ချိတ်ဆက်မှုကို ပြန်စစ်ပါ။")
+        if not str(scene.get("shot_size") or "").strip():
+            warnings.append(f"{sid}: Shot Size မရှိပါ။")
+        if not str(scene.get("lighting") or "").strip():
+            warnings.append(f"{sid}: Lighting plan မရှိပါ။")
     if total != duration:
         issues.append(f"Timeline စုစုပေါင်း {total}s ဖြစ်နေသည်; {duration}s ဖြစ်ရမည်။")
-    return {"passed": not issues, "issues": issues, "scene_count": len(scenes), "total_seconds": total}
+    issues = list(dict.fromkeys(issues))
+    warnings = list(dict.fromkeys(warnings))
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "warnings": warnings,
+        "scene_count": len(scenes),
+        "total_seconds": total,
+        "duration_seconds": duration,
+        "continuity_review_required": bool(warnings),
+        "quality_scope": "Structural validation only; human review is required for story logic, dialogue, performance and visual quality."
+    }
 
 
 
@@ -563,6 +612,7 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
         char_text = "; ".join(f"{c.get('id')} {c.get('name')}: {c.get('appearance')}; preserve exact face, age, hair and proportions" for c in char_refs)
         location_text = f"{loc.get('id','LOC-?')} {loc.get('name','approved location')}: {loc.get('environment_lock','preserve established layout')}"
         action = str(scene.get("action") or scene.get("dramatic_purpose") or "Perform the scene action clearly.")
+        continuity_text = " ".join(str(x) for x in (scene.get("continuity") or []) if str(x).strip())
         dialogue = str(scene.get("dialogue") or "")
         shot = str(scene.get("shot_size") or "medium shot")
         angle = str(scene.get("camera_angle") or "eye-level")
@@ -575,8 +625,8 @@ def compile_scene_prompts(project: dict[str, Any], package: dict[str, Any]) -> l
         char_urls = ", ".join(f"{ch.get('id')}: {ch.get('reference_url')}" for ch in char_refs if ch.get("reference_url"))
         loc_url = loc.get("reference_url") or "manually attach the saved location reference image"
         common = f"Approved reference assets: {', '.join(ch.get('id','') for ch in char_refs)} and {loc.get('id','LOC-?')}. Character reference URLs if accessible: {char_urls or 'no URL saved; manually attach reference images'}. Location reference URL if accessible: {loc_url}. Character references: {char_text}. Location reference: {location_text}. Wardrobe lock: {wardrobe or 'use approved character wardrobe'}. Props: {prop_text or 'only story-required props'}. Culture: {culture}. Visual style: {style}. Style execution: {style_direction}. Apply the selected medium consistently to faces, materials, edges/linework, shading/rendering, lighting, motion, background design and color grade. Do not switch to another visual medium. Aspect ratio {ratio}. Keep faces, ages, hairstyles, body proportions, wardrobe, architecture, object positions and screen direction consistent. No additional characters, no text, no subtitles, no logos or watermark."
-        image_prompt = f"Create a cinematic still for {scene.get('scene_id')}. {common} Action and dramatic purpose: {action}. Shot composition: {shot}, {angle}. Lighting and color: {lighting}. Mood should support {scene.get('dramatic_purpose','the story beat')}. One coherent frame, believable anatomy and physically plausible staging."
-        video_prompt = f"Use the saved reference images for {', '.join(c.get('id','') for c in char_refs) or 'the approved characters'} and location {loc.get('id','LOC-?')}. Create one continuous {scene.get('duration_seconds',8)}-second shot. Action over time: {action}. Dialogue in {project.get('language','Burmese')}: {dialogue if dialogue and dialogue.lower() not in {'none','n/a','မရှိ'} else 'No spoken dialogue; use natural environmental sound only.'} Shot: {shot}, {angle}. Camera movement: {movement}. Lighting: {lighting}. Natural facial expressions and body movement, plausible timing, clear speaker/listener behavior, no accidental lip movement for silent characters. {common}"
+        image_prompt = f"Create a cinematic still for {scene.get('scene_id')}. {common} Dramatic purpose: {scene.get('dramatic_purpose', '')}. Action and dramatic purpose: {action}. Continuity constraints: {continuity_text}. Shot composition: {shot}, {angle}. Lighting and color: {lighting}. Mood should support {scene.get('dramatic_purpose','the story beat')}. One coherent frame, believable anatomy and physically plausible staging."
+        video_prompt = f"Use the saved reference images for {', '.join(c.get('id','') for c in char_refs) or 'the approved characters'} and location {loc.get('id','LOC-?')}. Create one continuous {scene.get('duration_seconds',8)}-second shot. Story beat purpose: {scene.get('dramatic_purpose', '')}. Action over time: {action}. Continuity with prior and next scene: {continuity_text}. Keep one continuous action with clear start and end; do not add unsupported story events. Dialogue in {project.get('language','Burmese')}: {dialogue if dialogue and dialogue.lower() not in {'none','n/a','မရှိ'} else 'No spoken dialogue; use natural environmental sound only.'} Shot: {shot}, {angle}. Camera movement: {movement}. Lighting: {lighting}. Natural facial expressions and body movement, plausible timing, clear speaker/listener behavior, no accidental lip movement for silent characters. {common}"
         out.append({
             "clip_number": i+1, "scene_id": scene.get("scene_id", f"SC-{i+1:03d}"),
             "start_seconds": int(scene.get("start_seconds", i*8)),
