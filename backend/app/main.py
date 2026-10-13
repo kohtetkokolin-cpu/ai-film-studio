@@ -679,13 +679,23 @@ def get_project(pid: str, user: dict = Depends(current_user)):
 
 @app.patch("/api/projects/{pid}")
 def update_project(pid: str, payload: dict[str, Any], user: dict = Depends(current_user)):
-    get_owned_project(pid, user)
+    existing = get_owned_project(pid, user)
     allowed = {"title", "genre", "duration_seconds", "visual_style", "workflow", "aspect_ratio",
         "language", "culture", "generation_mode", "sound_mode", "story_idea", "character_bible",
         "location_bible", "continuity_notes"}
-    data = {k: v for k, v in payload.items() if k in allowed}
+    unknown = set(payload) - allowed
+    if unknown:
+        raise HTTPException(422, "မသိသော Project field: " + ", ".join(sorted(unknown)[:8]))
+    data = dict(payload)
     if not data:
         raise HTTPException(400, "ပြင်ဆင်ရန် field မရှိပါ။")
+    candidate = {key: existing.get(key) for key in allowed}
+    candidate.update(data)
+    try:
+        validated = ProjectIn.model_validate(candidate)
+    except Exception as exc:
+        raise HTTPException(422, "Project settings မမှန်ပါ။ Title, Story Idea (အနည်းဆုံး 10 လုံး)၊ duration 8–300 seconds နှင့် settings များကို စစ်ပါ။") from exc
+    data = {key: value for key, value in validated.model_dump().items() if key in data}
     if "generation_mode" in data and data["generation_mode"] not in MODES:
         raise HTTPException(422, "generation_mode သည် template, gemini သို့မဟုတ် auto ဖြစ်ရမည်။")
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
